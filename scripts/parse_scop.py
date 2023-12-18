@@ -1,5 +1,5 @@
-"""This script downloads a clustered version of the SCOP database and parses the sequences
-into groups based on their SCOP classificaiton.
+"""This script downloads a clustered version of the SCOP database and writes sequences
+to another fasta file with their classifications on the ID line.
 
 __author__ = "Ben Iovino"
 __date__ = "12/17/23"
@@ -27,14 +27,14 @@ def download_file(url: str, filename: str):
 
 
 def parse_class(filename: str) -> dict:
-    """Parses the SCOP classification file into a dictionary.
+    """Returns a dictionary of classifications for each protein.
 
     Args:
-        filename (str): Name of file to parse.
+        filename (str): Name of SCOP classification file to parse.
 
     Returns:
-        dict: dictionary where key is protein ID and value is a list of the region and
-            fold, superfamily, and family classifications
+        dict: dictionary where key is protein ID and value is a list of the fold,
+            superfamily, and family classifications
     """
 
     classes = {}
@@ -43,11 +43,11 @@ def parse_class(filename: str) -> dict:
             if line[0] == '#':  # Header lines
                 continue
 
-            # Get protein ID, region, and classifications
+            # Get protein ID and classifications
             line = line.split()
-            pid, reg, cla = line[0], line[2], line[5]
+            pid, cla = line[0], line[5]
             fold, superfam, fam = cla.split(',')[1:4]
-            classes[pid] = [reg, fold, superfam, fam]
+            classes[pid] = [fold, superfam, fam]
 
     return classes
 
@@ -77,14 +77,15 @@ def write_seqs(classes: dict, seqs: dict):
     """Writes sequences in seqs to fasta file with classifications on ID line.
 
     Args:
-        classes (dict): dictionary where key is protein ID and value is a list of descriptions
+        classes (dict): dictionary where key is protein ID and value is a list of the
+            classifications
         seqs (dict): dictionary where key is protein ID and value is the fasta sequence
     """
 
     with open('data/scop_seqs.fa', 'w', encoding='utf8') as file:
         for pid, seq in seqs.items():
             desc = classes[pid]
-            file.write(f'>{pid}\t{desc[0]}\t{desc[1]},{desc[2]},{desc[3]}\n{seq}\n')
+            file.write(f'>{pid}\t{desc[0]},{desc[1]},{desc[2]}\n{seq}\n')
 
 
 def main():
