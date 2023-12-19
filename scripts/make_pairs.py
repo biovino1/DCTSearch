@@ -61,13 +61,35 @@ def get_homs(folds: dict):
             write_pairs('hom', weight, pairs)
 
 
+def get_nonhoms(folds: dict):
+    """Gets all pairs of proteins between each fold and writes each pair to file along
+    with their fold weight, 1 / (number of proteins in fold).
+
+    Args:
+        folds (dict): Dictionary of folds and their proteins.
+    """
+
+    # Get non-homologous pairs
+    for fold1, pids1 in folds.items():
+        for fold2, pids2 in folds.items():
+            if fold1 == fold2:
+                continue
+
+            pairs = []
+            weight = 1 / (len(pids2))  # Weight for each pair given "query" fold size
+            for pid1 in pids1:
+                for pid2 in pids2:
+                    pairs.append((pid1, pid2))
+            write_pairs('nonhom', weight, pairs)
+
+
 def main():
     """Main function
     """
 
-    # Parse SCOP seqs file from parse_scop.py
     folds = get_folds('data/scop_seqs.fa')
     get_homs(folds)
+    get_nonhoms(folds)
 
 
 if __name__ == '__main__':
