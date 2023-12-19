@@ -104,14 +104,14 @@ class Transform:
         """
 
         f = dct(vec.T, type=2, norm='ortho')
-        trans = idct(f[:,:num], type=2, norm='ortho')
+        trans = idct(f[:,:num], type=2, norm='ortho')  #pylint: disable=E1126
         for i in range(len(trans)):  #pylint: disable=C0200
-            trans[i] = self.scale(trans[i])
+            trans[i] = self.scale(trans[i])  #pylint: disable=E1137
 
-        return trans.T
+        return trans.T  #pylint: disable=E1101
 
 
-    def quant_2d(self, n_dim: int, m_dim: int):
+    def quantize(self, n_dim: int, m_dim: int):
         """quant2D from protsttools. Takes an embedding and returns the iDCT quantization
         on both axes.
 
@@ -120,10 +120,7 @@ class Transform:
         :param m_dim: number of coefficients to keep on second axis
         """
 
-        dct = self.idct_quant(self.embed[1][1:len(self.embed[1])-1], n_dim)  #pylint: disable=W0621
+        dct = self.idct_quant(self.embed[1:len(self.embed)-1], n_dim)  #pylint: disable=W0621
         ddct = self.idct_quant(dct.T, m_dim).T
-        try:
-            ddct = ddct.reshape(n_dim * m_dim)
-            self.quant = (ddct*127).astype('int8')
-        except ValueError:  # If embedding is too small to transform
-            self.quant = None
+        ddct = ddct.reshape(n_dim * m_dim)
+        self.quant = (ddct*127).astype('int8')
