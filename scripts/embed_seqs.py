@@ -8,8 +8,8 @@ import argparse
 import datetime
 import logging
 import os
+import pickle
 import torch
-import numpy as np
 from Bio import SeqIO
 from embed import Model, Transform
 
@@ -48,7 +48,7 @@ def embed_seqs(seqs: list, efile: str):
     model.to_device(device)
 
     # Embed each sequence and write to file
-    quants = []
+    quants = {}
     for pid, seq in seqs.items():
 
         # Initialize object and embed
@@ -56,10 +56,10 @@ def embed_seqs(seqs: list, efile: str):
         quant = Transform(pid, seq)
         quant.esm2_embed(model, device, layer=17)
         quant.quantize(8, 75)
-        quants.append(quant)
+        quants[quant.id] = quant.quant
 
     with open(efile, 'wb') as file:
-        np.save(file, quants)
+        pickle.dump(quants, file)
 
 
 def main():
@@ -73,7 +73,7 @@ def main():
 
     # Load sequences from file and embed
     seqs = load_seqs(args.f)
-    embed_seqs(seqs, 'data/scop_quants.np')
+    embed_seqs(seqs, 'data/scop_quants.pkl')
 
 
 if __name__ == '__main__':
