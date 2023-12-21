@@ -4,6 +4,7 @@ __author__ = "Ben Iovino"
 __date__ = "12/19/23"
 """
 
+import argparse
 from random import sample
 import regex as re
 from Bio import SeqIO
@@ -91,9 +92,14 @@ def main():
     """Main function
     """
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-s', type=int, default=250, help='Number of pairs to sample')
+    args = parser.parse_args()
+
+    # Get folds and all pairs within and in between
     folds = get_folds('data/scop_seqs.fa')
-    get_homs(folds, 500)
-    get_nonhoms(folds, 500)
+    get_homs(folds, args.s)
+    get_nonhoms(folds, args.s)
 
 
 if __name__ == '__main__':
