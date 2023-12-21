@@ -137,7 +137,7 @@ def make_hh_db(direc: str, pid: str, seq: str):
     # Make sure you have database in data directory, use scop40 for this project
     os.system(f'ffindex_from_fasta -s {direc}/db_fas.ffdata '
                 f'{direc}/db_fas.ffindex {direc}/db.fas')
-    os.system(f'hhblits_omp -i {direc}/db_fas -d data/scop40_01Mar17/scop40 '
+    os.system(f'hhblits_omp -i {direc}/db_fas -d data/scop70_01Mar17/scop70 '
                 f'-oa3m {direc}/db_a3m -n 2 -cpu 1 -v 0')
     os.system(f'ffindex_apply {direc}/db_a3m.ffdata {direc}/db_a3m.ffindex '
                 f'-i {direc}/db_hmm.ffindex -d {direc}/db_hmm.ffdata '
@@ -170,9 +170,7 @@ def get_hh_score(result: str) -> float:
 
 
 def hhsearch_search(pairs: list, seqs: dict):
-    """This function takes a list of protein pairs, each pair being used to get their respective
-    sequences from a dictionary of seqs. The first sequence is used as the 'database' and the second
-    sequence is used as the query sequence in a hhsearch search.
+    """Finds bitscore between each pair of proteins using HHsearch.
 
     Args:
         pairs (list): List of protein pairs.
@@ -193,11 +191,45 @@ def hhsearch_search(pairs: list, seqs: dict):
         write_seq(f'{direc}/query_seq.fa', pair[1], query_seq)
 
         # Get bitscore and log
-        result = sp.getoutput(f'hhsearch -i {direc}/query_seq.fa '
-                                       f'-d {direc}/db -E 1000000000')
+        hhsearch = f'hhsearch -i {direc}/query_seq.fa -d {direc}/db -E 1e9'
+        result = sp.getoutput(hhsearch)
         result = get_hh_score(result)
         logging.info('%s: %s %s %s %s %s',
                       datetime.now(), pair[0], pair[1], pair[2], pair[3], result)
+
+    os.system(f'rm -rf {direc}')
+
+
+def mmseqs_search(pairs: list, seqs: dict):
+    """Not sure yet
+
+    Args:
+        pairs (list): List of protein pairs.
+        seqs (dict): Dictionary of protein sequences.
+    """
+
+    direc, db_seq = 'data/mmseqs', ''
+    os.makedirs(direc, exist_ok=True)
+    for pair in pairs:
+
+        # Make MMseqs DB if new sequence
+        if db_seq != seqs[pair[0]]:
+            db_seq = seqs[pair[0]]
+            write_seq(f'{direc}/db.fa', pair[0], db_seq)
+
+        # Query is always new, write to file
+        query_seq = seqs[pair[1]]
+        write_seq(f'{direc}/q.fa', pair[1], query_seq)
+
+        # Get E-value and log
+        esearch = f'mmseqs easy-search {direc}/q.fa {direc}/db.fa {direc}/res.m8 ' \
+                    f'{direc}/tmp/ -s 7.0 --format-output "evalue" -v 0'
+        os.system(esearch)
+        result = sp.getoutput(f'cat {direc}/res.m8')
+        if result == '':
+            result = 0
+        logging.info('%s: %s %s %s %s %s',
+                        datetime.now(), pair[0], pair[1], pair[2], pair[3], result)
 
     os.system(f'rm -rf {direc}')
 
@@ -214,6 +246,7 @@ def main():
     #dct_search(pairs)
     #blast_search(pairs, seqs)
     hhsearch_search(pairs, seqs)
+    #mmseqs_search(pairs, seqs)
 
 
 if __name__ == '__main__':
