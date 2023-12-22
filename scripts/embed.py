@@ -31,7 +31,7 @@ class Model:
         """Loads ESM-2 model.
         """
 
-        self.encoder, alphabet = esm.pretrained.esm2_t36_3B_UR50D()
+        self.encoder, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
         self.tokenizer = alphabet.get_batch_converter()
         self.encoder.eval()
 
@@ -57,14 +57,14 @@ class Transform:
     quant: np.ndarray = None
 
 
-    def esm2_embed(self, model: Model, device: str, layer: int):
+    def esm2_embed(self, model: Model, device: str, layers: list):
         """Returns embedding of a protein sequence. Each vector represents a single amino
         acid using Facebook's ESM2 model.
 
         Args:
-            model (Model): Model class with encoder and tokenizer
+            model (Model): Model class with encoder and tokenizer.
             device (str): gpu/cpu
-            layer (int): layer of ESM2 to use for embedding
+            layer (list: List of layers to embed with.
         """
 
         # Embed sequences
@@ -74,8 +74,8 @@ class Transform:
         batch_tokens = batch_tokens.to(device)  # send tokens to gpu
 
         with torch.no_grad():
-            results = model.encoder(batch_tokens, repr_layers=[layer])
-        embed = results["representations"][layer].cpu().numpy()
+            results = model.encoder(batch_tokens, repr_layers=layers)
+        embed = results["representations"][17].cpu().numpy()
         self.embed = embed[0][1:-1]  # remove beginning and end tokens
 
 
@@ -83,10 +83,10 @@ class Transform:
         """Scale from protsttools. Takes a vector and returns it scaled between 0 and 1.
 
         Args:
-            vec (np.ndarray): vector to be scaled
+            vec (np.ndarray): Vector to be scaled.
 
         Returns:
-            np.ndarray: scaled vector 
+            np.ndarray: Scaled vector.
         """
 
         maxi = np.max(vec)
@@ -98,9 +98,12 @@ class Transform:
     def idct_quant(self, vec: np.ndarray, num: int) -> np.ndarray:
         """iDCTquant from protsttools. Takes a vector and returns the iDCT of the DCT.
 
-        :param vec: vector to be transformed
-        :param num: number of coefficients to keep
-        :return: transformed vector
+        Args:
+            vec (np.ndarray): Vector to be transformed.
+            num (int): Number of coefficients to keep.
+
+        Returns:
+            np.ndarray: Transformed vector.
         """
 
         f = dct(vec.T, type=2, norm='ortho')
@@ -112,12 +115,12 @@ class Transform:
 
 
     def quantize(self, n_dim: int, m_dim: int):
-        """quant2D from protsttools. Takes an embedding and returns the iDCT quantization
-        on both axes.
+        """quant2D from protsttools. Takes an embedding and returns the flattened iDCT
+        quantization on both axes.
 
-        :param emb: embedding to be transformed (n x m array)
-        :param n_dim: number of coefficients to keep on first axis
-        :param m_dim: number of coefficients to keep on second axis
+        Args:
+            n_dim (int): Number of coefficients to keep on first axis.
+            m_dim (int): Number of coefficients to keep on second axis.
         """
 
         dct = self.idct_quant(self.embed[1:len(self.embed)-1], n_dim)  #pylint: disable=W0621

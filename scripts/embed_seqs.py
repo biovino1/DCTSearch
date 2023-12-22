@@ -36,11 +36,13 @@ def load_seqs(filename: str) -> dict:
     return seqs
 
 
-def embed_seqs(seqs: list, efile: str):
+def embed_seqs(seqs: list, efile: str, layers: list):
     """Embeds a list of sequences and writes them to a file.
 
-    :param seqs: list of sequences
-    :param efile: path to embeddings file to save
+    Args:
+        seqs (list): List of sequences to embed.
+        efile (str): File to write embeddings to.
+        layers (list): List of layers to use for embedding.
     """
 
     model = Model('esm2')  # pLM encoder and tokenizer
@@ -54,7 +56,7 @@ def embed_seqs(seqs: list, efile: str):
         # Initialize object and embed
         logging.info('%s: Embedding %s', datetime.datetime.now(), pid)
         quant = Transform(pid, seq)
-        quant.esm2_embed(model, device, layer=17)
+        quant.esm2_embed(model, device, layers=layers)
         quant.quantize(8, 75)
         quants[quant.id] = quant.quant
 
@@ -67,13 +69,14 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-f', type=str, default='data/scop_seqs.fa', help='fasta file to embed')
     parser.add_argument('-e', type=str, help='file to save embeddings to')
+    parser.add_argument('-f', type=str, default='data/scop_seqs.fa', help='fasta file to embed')
+    parser.add_argument('-l', type=int, nargs='+', default=[17, 25], help='embedding layers')
     args = parser.parse_args()
 
     # Load sequences from file and embed
     seqs = load_seqs(args.f)
-    embed_seqs(seqs, 'data/scop_quants.pkl')
+    embed_seqs(seqs, 'data/scop_quants.pkl', args.l)
 
 
 if __name__ == '__main__':
