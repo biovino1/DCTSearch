@@ -7,6 +7,7 @@ __date__ = "12/19/23"
 import logging
 import os
 import pickle
+import regex as re
 import subprocess as sp
 from datetime import datetime
 from Bio import SeqIO
@@ -86,7 +87,7 @@ def write_seq(filename: str, pid: str, seq: str):
 
 
 def blast_search(pairs: list, seqs: dict):
-    """Finds E-value between each pair of proteins using BLAST.
+    """Finds bitscore between each pair of proteins using BLAST.
 
     Args:
         pairs (list): List of protein pairs.
@@ -116,6 +117,46 @@ def blast_search(pairs: list, seqs: dict):
             result = 0
         logging.info('%s: %s %s %s %s %s',
                       datetime.now(), pair[0], pair[1], pair[2], pair[3], result)
+
+    os.system(f'rm -rf {direc}')
+
+
+def csblast_search(pairs: list, seqs: dict):
+    """Returns the bitscore between each pair of proteins using CS-BLAST.
+    
+    Args:
+        pairs (list): List of protein pairs.
+        seqs (dict): Dictionary of protein sequences.
+    """
+
+    direc, db_seq = 'data/csblast', ''
+    os.makedirs(direc, exist_ok=True)
+    for pair in pairs:
+
+        # Make BLAST database if new sequence
+        if db_seq != seqs[pair[0]]:
+            db_seq = seqs[pair[0]]
+            write_seq(f'{direc}/db.fa', pair[0], db_seq)
+            os.system(f'formatdb -t {direc}/db -i {direc}/db.fa -p T -l {direc}/formatdb.log')
+
+        # Query is always new, write to file
+        query_seq = seqs[pair[1]]
+        write_seq(f'{direc}/q.fa', pair[1], query_seq)
+
+        # Get bitscore and log
+        csblast = f'csblast -i {direc}/q.fa -d {direc}/db.fa ' \
+              '-D /home/ben/anaconda3/data/K4000.lib --blast-path $CONDA_PREFIX/bin -e 1e9'
+        result = sp.getoutput(csblast)
+
+        # Search for bitscore with regex 'Score = x.x bits'
+        reg = re.compile(r'Score = (\d+.\d+) bits')
+        result = reg.findall(result)
+        try:
+            result = result[0]
+        except IndexError:  # No hits detected
+            result = 0
+        logging.info('%s: %s %s %s %s %s',
+                        datetime.now(), pair[0], pair[1], pair[2], pair[3], result)
 
     os.system(f'rm -rf {direc}')
 
@@ -201,7 +242,7 @@ def hhsearch_search(pairs: list, seqs: dict):
 
 
 def mmseqs_search(pairs: list, seqs: dict):
-    """Not sure yet
+    """Finds E-value between each pair of proteins using MMseqs easy-search.
 
     Args:
         pairs (list): List of protein pairs.
@@ -243,10 +284,11 @@ def main():
     seqs = get_seqs('data/scop_seqs.fa')
 
     # Evaluate each pair with given method
-    #dct_search(pairs)
-    #blast_search(pairs, seqs)
+    dct_search(pairs)
+    blast_search(pairs, seqs)
+    csblast_search(pairs, seqs)
     hhsearch_search(pairs, seqs)
-    #mmseqs_search(pairs, seqs)
+    mmseqs_search(pairs, seqs)
 
 
 if __name__ == '__main__':
