@@ -5,7 +5,7 @@ __author__ = "Ben Iovino"
 __date__ = "12/18/23"
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import esm
 import torch
 import numpy as np
@@ -51,10 +51,17 @@ class Transform:
     """This class stores the inverse discrete cosine transform (iDCT) quantization of
     an embedded protein sequence.
     """
-    id: str = ''
-    seq: str = ''
-    embed: np.ndarray = None
-    quant: np.ndarray = None
+    pid: str = field(default_factory=str)
+    seq: str = field(default_factory=str)
+    embed: dict = field(default_factory=dict)
+    quant: np.array = field(default_factory=list)
+
+
+    def __post_init__(self):
+        """Initialize quant to empty array.
+        """
+
+        self.quant = np.array([])
 
 
     def esm2_embed(self, model: Model, device: str, layers: list):
@@ -69,14 +76,18 @@ class Transform:
 
         # Embed sequences
         self.seq = self.seq.upper()  # tok does not convert to uppercase
-        embed = [np.array([self.id, self.seq], dtype=object)]  # for tokenizer
+        embed = [np.array([self.pid, self.seq], dtype=object)]  # for tokenizer
         _, _, batch_tokens = model.tokenizer(embed)
         batch_tokens = batch_tokens.to(device)  # send tokens to gpu
-
         with torch.no_grad():
             results = model.encoder(batch_tokens, repr_layers=layers)
-        embed = results["representations"][17].cpu().numpy()
-        self.embed = embed[0][1:-1]  # remove beginning and end tokens
+
+        # Store embedding from each layer
+        embed = {}
+        for layer in layers:
+            emb = results["representations"][layer].cpu().numpy()
+            embed[layer] = emb[0][1:-1]
+        self.embed = embed
 
 
     def scale(self, vec: np.ndarray) -> np.ndarray:
@@ -114,16 +125,19 @@ class Transform:
         return trans.T  #pylint: disable=E1101
 
 
-    def quantize(self, n_dim: int, m_dim: int):
-        """quant2D from protsttools. Takes an embedding and returns the flattened iDCT
+    def quantize(self, qdim: list):
+        """quant2D from protsttools. Takes an embedding(s) and returns the flattened iDCT
         quantization on both axes.
 
         Args:
-            n_dim (int): Number of coefficients to keep on first axis.
-            m_dim (int): Number of coefficients to keep on second axis.
+            qdim (list): List of quantization dimensions. Even indices are for the first
+                        axis and odd indices are for the second axis.
         """
 
-        dct = self.idct_quant(self.embed[1:len(self.embed)-1], n_dim)  #pylint: disable=W0621
-        ddct = self.idct_quant(dct.T, m_dim).T
-        ddct = ddct.reshape(n_dim * m_dim)
-        self.quant = (ddct*127).astype('int8')
+        # Perform iDCT quantization on each layer
+        for i, embed in enumerate(self.embed.values()):
+            n_dim, m_dim = qdim[i*2], qdim[i*2+1]
+            dct = self.idct_quant(embed[1:len(embed)-1], n_dim)  #pylint: disable=W0621
+            ddct = self.idct_quant(dct.T, m_dim).T
+            ddct = ddct.reshape(n_dim * m_dim)
+            self.quant = np.append(self.quant, ddct)

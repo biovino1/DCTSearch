@@ -36,13 +36,14 @@ def load_seqs(filename: str) -> dict:
     return seqs
 
 
-def embed_seqs(seqs: list, efile: str, layers: list):
+def embed_seqs(seqs: list, efile: str, layers: list, qdim: list):
     """Embeds a list of sequences and writes them to a file.
 
     Args:
         seqs (list): List of sequences to embed.
         efile (str): File to write embeddings to.
         layers (list): List of layers to use for embedding.
+        qdim (list): List of quantization dimensions.
     """
 
     model = Model('esm2')  # pLM encoder and tokenizer
@@ -55,10 +56,10 @@ def embed_seqs(seqs: list, efile: str, layers: list):
 
         # Initialize object and embed
         logging.info('%s: Embedding %s', datetime.datetime.now(), pid)
-        quant = Transform(pid, seq)
+        quant = Transform(pid=pid, seq=seq)
         quant.esm2_embed(model, device, layers=layers)
-        quant.quantize(8, 75)
-        quants[quant.id] = quant.quant
+        quant.quantize(qdim)
+        quants[quant.pid] = quant.quant
 
     with open(efile, 'wb') as file:
         pickle.dump(quants, file)
@@ -72,11 +73,13 @@ def main():
     parser.add_argument('-e', type=str, help='file to save embeddings to')
     parser.add_argument('-f', type=str, default='data/scop_seqs.fa', help='fasta file to embed')
     parser.add_argument('-l', type=int, nargs='+', default=[17, 25], help='embedding layers')
+    parser.add_argument('-q', type=int, nargs='+', default=[3, 85, 5, 44],
+                         help='quantization dimensions, each pair of dimensions quantizes a layer')
     args = parser.parse_args()
 
     # Load sequences from file and embed
     seqs = load_seqs(args.f)
-    embed_seqs(seqs, 'data/scop_quants.pkl', args.l)
+    embed_seqs(seqs, 'data/scop_quants.pkl', args.l, args.q)
 
 
 if __name__ == '__main__':
