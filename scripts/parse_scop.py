@@ -45,9 +45,10 @@ def parse_class(filename: str) -> dict:
 
             # Get protein ID and classifications
             line = line.split()
-            pid, cla = line[0], line[5]
-            fold, superfam, fam = cla.split(',')[1:4]
-            classes[pid] = [fold, superfam, fam]
+            pid = line[0]
+            reg = r'cf=[0-9]*'  # Fold ID
+            cla = re.search(reg, line[5]).group()[3:]
+            classes[pid] = cla
 
     return classes
 
@@ -84,8 +85,8 @@ def write_seqs(classes: dict, seqs: dict):
 
     with open('data/scop_seqs.fa', 'w', encoding='utf8') as file:
         for pid, seq in seqs.items():
-            desc = classes[pid]
-            file.write(f'>{pid}\t{desc[0]},{desc[1]},{desc[2]}\n{seq}\n')
+            cla = classes[pid]
+            file.write(f'>{pid}\t{cla}\n{seq}\n')
 
 
 def main():
@@ -93,10 +94,10 @@ def main():
     """
 
     # Download database and classification file
-    url1 = 'https://scop.berkeley.edu/astral/subsets/?ver=2.08&get=bib&seqOption=1&item=seqs&cut=20'
-    url2 = 'https://scop.berkeley.edu/downloads/parse/dir.cla.scope.2.08-stable.txt'
-    download_file(url1, 'scop20.fa')
-    download_file(url2, 'scop_class.txt')
+    #url1 = 'https://scop.berkeley.edu/astral/subsets/?ver=2.08&get=bib&seqOption=1&item=seqs&cut=20'
+    #url2 = 'https://scop.berkeley.edu/downloads/parse/dir.cla.scope.2.08-stable.txt'
+    #download_file(url1, 'scop20.fa')
+    #download_file(url2, 'scop_class.txt')
 
     # Parse files and write fasta file with descriptions on ID line
     classes = parse_class('data/scop_class.txt')

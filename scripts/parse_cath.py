@@ -58,7 +58,7 @@ def write_classes(filename: str, classes: dict):
         seqs[pid] = str(seq.seq)
 
     # Write to new fasta file
-    with open('data/cath20.fa', 'w', encoding='utf8') as file:
+    with open('data/cath_seqs.fa', 'w', encoding='utf8') as file:
         for pid, seq in seqs.items():
             file.write(f'>{pid}\n{seq}\n')
 
