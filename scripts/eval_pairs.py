@@ -4,12 +4,13 @@ __author__ = "Ben Iovino"
 __date__ = "12/19/23"
 """
 
+import argparse
 import logging
 import os
 import pickle
-import regex as re
 import subprocess as sp
 from datetime import datetime
+import regex as re
 from Bio import SeqIO
 
 log_filename = 'data/logs/eval_pairs.log'  #pylint: disable=C0103
@@ -54,16 +55,17 @@ def get_seqs(filename: str) -> dict:
     return seqs
 
 
-def dct_search(pairs: list):
+def dct_search(filename: str, pairs: list):
     """Finds distance between each pair of proteins using the manhattan distance between
     their DCT fingerprints.
 
     Args:
+        filename (str): Name of file containing DCT fingerprints.
         pairs (list): List of protein pairs.
     """
 
     # Load DCT fingerprints
-    with open('data/scop_quants.pkl', 'rb') as qfile:
+    with open(filename, 'rb') as qfile:
         quants = pickle.load(qfile)
 
     # Find distance and log
@@ -210,7 +212,7 @@ def get_hh_score(result: str) -> float:
     return result
 
 
-def hhsearch_search(pairs: list, seqs: dict):
+def hhblits_search(pairs: list, seqs: dict):
     """Finds bitscore between each pair of proteins using HHsearch.
 
     Args:
@@ -232,7 +234,7 @@ def hhsearch_search(pairs: list, seqs: dict):
         write_seq(f'{direc}/query_seq.fa', pair[1], query_seq)
 
         # Get bitscore and log
-        hhsearch = f'hhsearch -i {direc}/query_seq.fa -d {direc}/db -E 1e9'
+        hhsearch = f'hhblits -i {direc}/query_seq.fa -d {direc}/db -E 1e9'
         result = sp.getoutput(hhsearch)
         result = get_hh_score(result)
         logging.info('%s: %s %s %s %s %s',
@@ -241,54 +243,41 @@ def hhsearch_search(pairs: list, seqs: dict):
     os.system(f'rm -rf {direc}')
 
 
-def mmseqs_search(pairs: list, seqs: dict):
-    """Finds E-value between each pair of proteins using MMseqs easy-search.
+def search(method: str, pairs: list, seqs: dict):
+    """Calls the appropriate search function.
 
     Args:
+        method (str): Method to use for search.
         pairs (list): List of protein pairs.
         seqs (dict): Dictionary of protein sequences.
     """
 
-    direc, db_seq = 'data/mmseqs', ''
-    os.makedirs(direc, exist_ok=True)
-    for pair in pairs:
-
-        # Make MMseqs DB if new sequence
-        if db_seq != seqs[pair[0]]:
-            db_seq = seqs[pair[0]]
-            write_seq(f'{direc}/db.fa', pair[0], db_seq)
-
-        # Query is always new, write to file
-        query_seq = seqs[pair[1]]
-        write_seq(f'{direc}/q.fa', pair[1], query_seq)
-
-        # Get E-value and log
-        esearch = f'mmseqs easy-search {direc}/q.fa {direc}/db.fa {direc}/res.m8 ' \
-                    f'{direc}/tmp/ -s 7.0 --format-output "evalue" -v 0'
-        os.system(esearch)
-        result = sp.getoutput(f'cat {direc}/res.m8')
-        if result == '':
-            result = 0
-        logging.info('%s: %s %s %s %s %s',
-                        datetime.now(), pair[0], pair[1], pair[2], pair[3], result)
-
-    os.system(f'rm -rf {direc}')
+    if method == 'dct':
+        dct_search('data/scop_quants.pkl', pairs)
+    elif method == 'blast':
+        blast_search(pairs, seqs)
+    elif method == 'csblast':
+        csblast_search(pairs, seqs)
+    elif method == 'hhsearch':
+        hhblits_search(pairs, seqs)
+    else:
+        raise ValueError(f'Invalid method: {method}')
 
 
 def main():
     """Main function
     """
 
-    # Get all pairs
-    pairs = get_pairs('data/scop_pairs.txt')
-    seqs = get_seqs('data/scop_seqs.fa')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-f', type=str, default='data/scop_seqs.fa', help='Fasta file')
+    parser.add_argument('-p', type=str, default='data/scop_pairs.txt', help='Pair file')
+    parser.add_argument('-m', type=str, default='dct', help='Method to use')
+    args = parser.parse_args()
 
-    # Evaluate each pair with given method
-    dct_search(pairs)
-    blast_search(pairs, seqs)
-    csblast_search(pairs, seqs)
-    hhsearch_search(pairs, seqs)
-    mmseqs_search(pairs, seqs)
+    # Get all pairs and evaluate
+    pairs = get_pairs(args.f)
+    seqs = get_seqs(args.p)
+    search(args.m, pairs, seqs)
 
 
 if __name__ == '__main__':
