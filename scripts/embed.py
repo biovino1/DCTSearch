@@ -16,22 +16,33 @@ class Model:
     """Stores model and tokenize for embedding sequences.
     """
 
-    def __init__(self, model: str):
+    def __init__(self, model: str, checkpoint: str):
         """Model contains encoder and tokenizer.
 
         Args:
             model (str): Model to use for embedding. Currently only supports ESM-2.
+            checkpoint (str): Model checkpoint to load.
         """
 
         if model == 'esm2':
-            self.load_esm2()
+            self.load_esm2(checkpoint)
 
 
-    def load_esm2(self):
+    def load_esm2(self, checkpoint: str):
         """Loads ESM-2 model.
         """
 
-        self.encoder, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
+        if checkpoint == 't36':
+            self.encoder, alphabet = esm.pretrained.esm2_t36_3B_UR50D()
+        if checkpoint == 't33':
+            self.encoder, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
+        if checkpoint == 't30':
+            self.encoder, alphabet = esm.pretrained.esm2_t30_150M_UR50D()
+        if checkpoint == 't12':
+            self.encoder, alphabet = esm.pretrained.esm2_t12_35M_UR50D()
+        if checkpoint == 't6':
+            self.encoder, alphabet = esm.pretrained.esm2_t6_8M_UR50D()
+
         self.tokenizer = alphabet.get_batch_converter()
         self.encoder.eval()
 

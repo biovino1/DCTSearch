@@ -36,7 +36,7 @@ def load_seqs(filename: str) -> dict:
     return seqs
 
 
-def embed_seqs(seqs: list, efile: str, layers: list, qdim: list):
+def embed_seqs(seqs: list, efile: str, layers: list, qdim: list, ch):
     """Embeds a list of sequences and writes them to a file.
 
     Args:
@@ -46,7 +46,7 @@ def embed_seqs(seqs: list, efile: str, layers: list, qdim: list):
         qdim (list): List of quantization dimensions.
     """
 
-    model = Model('esm2')  # pLM encoder and tokenizer
+    model = Model('esm2', ch)  # pLM encoder and tokenizer
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  # pylint: disable=E1101
     model.to_device(device)
 
@@ -70,6 +70,7 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
+    parser.add_argument('-c', type=str, default='t30', help='model checkpoint')
     parser.add_argument('-e', type=str, help='file to save embeddings to')
     parser.add_argument('-f', type=str, default='data/scop_seqs.fa', help='fasta file to embed')
     parser.add_argument('-l', type=int, nargs='+', default=[17, 25], help='embedding layers')
@@ -79,7 +80,7 @@ def main():
 
     # Load sequences from file and embed
     seqs = load_seqs(args.f)
-    embed_seqs(seqs, 'data/scop_quants.pkl', args.l, args.q)
+    embed_seqs(seqs, 'data/scop_quants.pkl', args.l, args.q, args.c)
 
 
 if __name__ == '__main__':
