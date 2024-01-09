@@ -7,6 +7,7 @@ __date__ = "1/08/24"
 
 import os
 import urllib.request
+import regex as re
 from Bio import SeqIO
 
 
@@ -53,8 +54,8 @@ def write_classes(filename: str, classes: dict):
     # Get all seqs from fasta file
     seqs = {}
     for seq in SeqIO.parse(filename, 'fasta'):
-        pid = seq.id.split('|')[2]
-        pid += f"\t{classes[pid.split('/')[0]]}"
+        pid = re.findall(r'\|([a-zA-Z0-9]*)\/', seq.id)[0]
+        pid += f"\t{classes[pid]}"
         seqs[pid] = str(seq.seq)
 
     # Write to new fasta file

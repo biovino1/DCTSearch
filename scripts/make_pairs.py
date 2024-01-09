@@ -22,7 +22,7 @@ def get_classes(filename: str) -> dict:
 
     classes = {}
     for record in SeqIO.parse(filename, 'fasta'):
-        cla = re.findall(r'(\d{5})', record.description)[0]
+        cla = re.findall(r'\t(\d*)', record.description)[0]
         classes[cla] = classes.get(cla, []) + [record.id]
 
     return classes
@@ -99,7 +99,7 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-f', type=str, default='data/scop_seqs.fa', help='Fasta file')
+    parser.add_argument('-f', type=str, default='data/cath_seqs.fa', help='Fasta file')
     parser.add_argument('-s', type=int, default=250, help='Number of pairs to sample')
     args = parser.parse_args()
 
