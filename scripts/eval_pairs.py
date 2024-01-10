@@ -253,7 +253,7 @@ def search(method: str, pairs: list, seqs: dict):
     """
 
     if method == 'dct':
-        dct_search('data/scop_quants.pkl', pairs)
+        dct_search('data/cath_quants.pkl', pairs)
     elif method == 'blast':
         blast_search(pairs, seqs)
     elif method == 'csblast':
@@ -269,14 +269,14 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-f', type=str, default='data/scop_seqs.fa', help='Fasta file')
-    parser.add_argument('-p', type=str, default='data/scop_pairs.txt', help='Pair file')
+    parser.add_argument('-f', type=str, default='data/cath_seqs.fa', help='Fasta file')
+    parser.add_argument('-p', type=str, default='data/cath_pairs.txt', help='Pair file')
     parser.add_argument('-m', type=str, default='dct', help='Method to use')
     args = parser.parse_args()
 
     # Get all pairs and evaluate
-    pairs = get_pairs(args.f)
-    seqs = get_seqs(args.p)
+    pairs = get_pairs(args.p)
+    seqs = get_seqs(args.f)
     search(args.m, pairs, seqs)
 
 

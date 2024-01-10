@@ -31,14 +31,14 @@ def parse_class(filename: str) -> dict:
         filename (str): Name of CATH classification file to parse.
 
     Returns:
-        dict: dictionary where key is protein ID and value is homologous family ID
+        dict: dictionary where key is protein ID and value is CATH ID
     """
 
     classes = {}
     with open(filename, 'r', encoding='utf8') as file:
         for line in file:
             line = line.split()
-            classes[line[0]] = line[4]
+            classes[line[0]] = ''.join(line[1:5])
 
     return classes
 
