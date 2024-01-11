@@ -11,30 +11,6 @@ from embed import Model
 from sklearn import metrics
 
 
-def weighted_conf_mat(labels: list, weights: list, scores: list, threshold: float) -> tuple:
-    """Returns confusion matrix for a given list of scores and labels with weighted samples.
-    
-    :param labels: list of labels
-    :param weights: list of weights for each label
-    :param scores: list of scores
-    :param threshold: threshold for classification
-    :return tuple: confusion matrix (tp, fp, tn, fn)
-    """
-
-    tn, fp, fn, tp = 0, 0, 0, 0
-    for i, label in enumerate(labels):
-        if scores[i] > threshold and label == 0:
-            tn += 1*weights[i]
-        if scores[i] > threshold and label == 1:
-            fn += 1*weights[i]
-        if scores[i] < threshold and label == 0:
-            fp += 1*weights[i]
-        if scores[i] < threshold and label == 1:
-            tp += 1*weights[i]
-
-    return (tp, fp, tn, fn)
-
-
 def calc_metrics(cfm: tuple, samples: int) -> tuple:
     """Returns accuracy, precision, recall, and F1 from a confusion matrix.
 
@@ -56,29 +32,27 @@ def get_metrics() -> tuple:
     """Returns a tuple of metrics for a given log file.
 
     Returns:
-        tuple: AUC, weighted TP and FP, accuracy, precision, recall, and F1.
+        tuple: AUC, TP/FP, accuracy, precision, recall, and F1.
     """
 
     # Get all values from log file
-    labels, scores, weights = [], [], []
+    labels, scores = [], []
     with open('data/logs/eval_pairs.log', 'r', encoding='utf8') as file:
         for line in file:
             line = line.split()
             labels.append(int(line[4]))
-            weights.append(float(line[5]))
-            scores.append(float(line[6]))
+            scores.append(float(line[5]))
 
     # Calculate AUC
     fpr, tpr, thresholds = metrics.roc_curve(labels, scores, pos_label=0)
     auc = metrics.auc(fpr, tpr)
 
-    # Weighted and non-weighted confusion matrices
+    # Get confusion matrix and metrics
     auc_thresh = thresholds[np.argmax(tpr - fpr)]
-    wcm = weighted_conf_mat(labels, weights, scores, auc_thresh)  # weighted
-    ncm = metrics.confusion_matrix(labels, scores < auc_thresh)  # non-weighted
+    ncm = metrics.confusion_matrix(labels, scores < auc_thresh)
     mets = calc_metrics(ncm, len(labels))  # acc, prec, rec, f1
 
-    return (auc, wcm[0], wcm[1], mets[0], mets[1], mets[2], mets[3])
+    return (auc, ncm[1][1], ncm[0][1], mets[0], mets[1], mets[2], mets[3])
 
 
 def test_layers():
@@ -108,7 +82,8 @@ def main():
     """Main
     """
 
-    test_layers()
+    mets = get_metrics()
+    print(mets)
 
 
 if __name__ == '__main__':

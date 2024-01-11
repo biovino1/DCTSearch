@@ -26,14 +26,14 @@ def get_pairs(filename: str) -> list:
         filename (str): Name of file to parse.
     
     Returns:
-        list: List of protein pairs, along with their classification and weight.
+        list: List of protein pairs.
     """
 
     with open(filename, 'r', encoding='utf8') as file:
         pairs = []
         for line in file:
             line = line.split()
-            pairs.append((line[0], line[1], line[2], float(line[3])))
+            pairs.append((line[0], line[1], line[2]))
 
     return pairs
 
@@ -71,8 +71,8 @@ def dct_search(filename: str, pairs: list):
     # Find distance and log
     for pair in pairs:
         dist = abs(quants[pair[0]] - quants[pair[1]]).sum()
-        logging.info('%s: %s %s %s %s %s',
-                      datetime.now(), pair[0], pair[1], pair[2], pair[3], dist)
+        logging.info('%s: %s %s %s %s',
+                      datetime.now(), pair[0], pair[1], pair[2], dist)
 
 
 def write_seq(filename: str, pid: str, seq: str):
@@ -177,7 +177,7 @@ def make_hh_db(direc: str, pid: str, seq: str):
     os.system(f'mkdir -p {direc}')
     write_seq(f'{direc}/db.fas', pid, seq)
 
-    # Make sure you have database in data directory, use scop40 for this project
+    # Make sure you have database in data directory, use scop70 for this project
     os.system(f'ffindex_from_fasta -s {direc}/db_fas.ffdata '
                 f'{direc}/db_fas.ffindex {direc}/db.fas')
     os.system(f'hhblits_omp -i {direc}/db_fas -d data/scop70_01Mar17/scop70 '
