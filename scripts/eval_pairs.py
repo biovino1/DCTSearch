@@ -243,17 +243,18 @@ def hhblits_search(pairs: list, seqs: dict):
     os.system(f'rm -rf {direc}')
 
 
-def search(method: str, pairs: list, seqs: dict):
+def search(method: str, db: str, pairs: list, seqs: dict):
     """Calls the appropriate search function.
 
     Args:
         method (str): Method to use for search.
+        db (str): Database to use for DCT search.
         pairs (list): List of protein pairs.
         seqs (dict): Dictionary of protein sequences.
     """
 
     if method == 'dct':
-        dct_search('data/cath_quants.npz', pairs)
+        dct_search(f'data/{db}_quants.npz', pairs)
     elif method == 'blast':
         blast_search(pairs, seqs)
     elif method == 'csblast':
@@ -269,15 +270,14 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-f', type=str, default='data/cath_seqs.fa', help='Fasta file')
-    parser.add_argument('-p', type=str, default='data/cath_pairs.txt', help='Pair file')
+    parser.add_argument('-d', type=str, default='scop', help='Database to use')
     parser.add_argument('-m', type=str, default='dct', help='Method to use')
     args = parser.parse_args()
 
     # Get all pairs and evaluate
-    pairs = get_pairs(args.p)
-    seqs = get_seqs(args.f)
-    search(args.m, pairs, seqs)
+    pairs = get_pairs(f'data/{args.d}_pairs.txt')
+    seqs = get_seqs(f'data/{args.d}_seqs.fa')
+    search(args.m, args.d, pairs, seqs)
 
 
 if __name__ == '__main__':
