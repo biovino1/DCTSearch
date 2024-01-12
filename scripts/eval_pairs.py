@@ -7,9 +7,9 @@ __date__ = "12/19/23"
 import argparse
 import logging
 import os
-import pickle
 import subprocess as sp
 from datetime import datetime
+import numpy as np
 import regex as re
 from Bio import SeqIO
 
@@ -65,8 +65,8 @@ def dct_search(filename: str, pairs: list):
     """
 
     # Load DCT fingerprints
-    with open(filename, 'rb') as qfile:
-        quants = pickle.load(qfile)
+    quantdb = np.load(filename)
+    quants = dict(zip(quantdb['pids'], quantdb['quants']))
 
     # Find distance and log
     for pair in pairs:
@@ -253,7 +253,7 @@ def search(method: str, pairs: list, seqs: dict):
     """
 
     if method == 'dct':
-        dct_search('data/cath_quants.pkl', pairs)
+        dct_search('data/cath_quants.npz', pairs)
     elif method == 'blast':
         blast_search(pairs, seqs)
     elif method == 'csblast':

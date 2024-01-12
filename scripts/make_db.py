@@ -8,12 +8,11 @@ import argparse
 import datetime
 import logging
 import os
-import pickle
+import numpy as np
 import torch
-from Bio import SeqIO
 from embed import Model, Transform
 
-log_filename = 'data/logs/embed_seqs.log'  #pylint: disable=C0103
+log_filename = 'data/logs/make_db.log'  #pylint: disable=C0103
 os.makedirs(os.path.dirname(log_filename), exist_ok=True)
 logging.basicConfig(filename=log_filename, filemode='w',
                      level=logging.INFO, format='%(message)s')
@@ -30,17 +29,23 @@ def load_seqs(filename: str) -> dict:
     """
 
     seqs = {}
-    for record in SeqIO.parse(filename, 'fasta'):
-        seqs[record.id] = str(record.seq)
+    with open(filename, 'r', encoding='utf8') as file:
+        for line in file:
+            if line.startswith('>'):
+                pid = line[1:].strip()
+                seqs[pid] = ''
+            else:
+                seqs[pid] += line.strip()
 
     return seqs
 
 
-def embed_seqs(seqs: list, efile: str, layers: list, qdim: list, ch):
-    """Embeds a list of sequences and writes them to a file.
+def embed_seqs(seqs: dict, efile: str, layers: list, qdim: list, ch):
+    """Creates DCT fingerprints for a set of protein sequences and saves them as a npz file with
+    two arrays, one for protein IDs and one for fingerprints.
 
     Args:
-        seqs (list): List of sequences to embed.
+        seqs (dict): Dictionary of protein sequences
         efile (str): File to write embeddings to.
         layers (list): List of layers to use for embedding.
         qdim (list): List of quantization dimensions.
@@ -50,19 +55,24 @@ def embed_seqs(seqs: list, efile: str, layers: list, qdim: list, ch):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  # pylint: disable=E1101
     model.to_device(device)
 
-    # Embed each sequence and write to file
-    quants = {}
+    # Embed and quantize each sequence
+    pids, quants = [], []
     for pid, seq in seqs.items():
 
         # Initialize object and embed
         logging.info('%s: Embedding %s', datetime.datetime.now(), pid)
-        quant = Transform(pid=pid, seq=seq)
-        quant.esm2_embed(model, device, layers=layers)
-        quant.quantize(qdim)
-        quants[quant.pid] = quant.quant
+        trans = Transform(pid=pid, seq=seq)
+        trans.esm2_embed(model, device, layers=layers)
+        trans.quantize(qdim)
 
-    with open(efile, 'wb') as file:
-        pickle.dump(quants, file)
+        # Add protein ID and it's fingerprint to lists for later storage
+        pids.append(pid)
+        quants.append(trans.quant)
+
+    # Make lists into numpy arrays and save as npz
+    pids = np.array(pids)
+    quants = np.array(quants)
+    np.savez_compressed(efile, pids=pids, quants=quants)
 
 
 def main():
@@ -70,17 +80,17 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', type=str, default='t30', help='model checkpoint')
-    parser.add_argument('-e', type=str, help='file to save embeddings to')
+    parser.add_argument('-c', type=str, default='t6', help='esm checkpoint')
+    parser.add_argument('-d', type=str, default='data/scop_quants', help='db file to write to')
     parser.add_argument('-f', type=str, default='data/scop_seqs.fa', help='fasta file to embed')
-    parser.add_argument('-l', type=int, nargs='+', default=[17, 25], help='embedding layers')
-    parser.add_argument('-q', type=int, nargs='+', default=[3, 85, 5, 44],
+    parser.add_argument('-l', type=int, nargs='+', default=[5], help='embedding layers')
+    parser.add_argument('-q', type=int, nargs='+', default=[5, 50],
                          help='quantization dimensions, each pair of dimensions quantizes a layer')
     args = parser.parse_args()
 
     # Load sequences from file and embed
     seqs = load_seqs(args.f)
-    embed_seqs(seqs, 'data/scop_quants.pkl', args.l, args.q, args.c)
+    embed_seqs(seqs, args.d, args.l, args.q, args.c)
 
 
 if __name__ == '__main__':
