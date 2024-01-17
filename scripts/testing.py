@@ -6,11 +6,9 @@ __date__ = "1/9/24"
 
 import os
 from datetime import datetime
-import torch
 import numpy as np
-from embed import Model, Transform
+from embed import Model
 from sklearn import metrics
-from make_db import load_seqs
 
 
 def calc_metrics(cfm: tuple, samples: int) -> tuple:
@@ -80,32 +78,6 @@ def test_layers():
                 file.write('\t'.join([str(round(m, 2)) for m in mets]) + '\n')
 
 
-def embed_seqs(seqs: dict, layers: list, ch: str) -> list:
-    """Returns a tuple of protein ID's and their corresponding embeddings.
-
-    Args:
-        seqs (dict): Dictionary of protein sequences
-        layers (list): Layers to use for embedding.
-        ch (str): ESM-2 checkpoint.
-
-    Returns:
-        tuple: List of Transform objects
-    """
-
-    model = Model('esm2', ch)  # pLM encoder and tokenizer
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  # pylint: disable=E1101
-    model.to_device(device)
-
-    # Just embed seqs
-    transforms = []
-    for pid, seq in seqs.items():
-        trans = Transform(pid=pid, seq=seq)
-        trans.esm2_embed(model, device, layers=layers)
-        transforms.append(trans)
-
-    return transforms
-
-
 def test_dims():
     """Tests performance of different iDCT quantization parameters.
     """
@@ -114,26 +86,12 @@ def test_dims():
     q2 = [30, 40, 50, 60, 70, 80, 90, 100]
     db = "cath"
 
-    # Embed sequences
-    seqs = load_seqs(f'data/{db}_seqs.fa')
-    transforms = embed_seqs(seqs, [15], 't30')
-
     # Grid search
     for q_1 in q1:
         for q_2 in q2:
 
-            # Quantize embeddings
-            pids, quants = [], []
-            for trans in transforms:
-                trans.quantize([q_1, q_2])
-                pids.append(trans.pid)
-                quants.append(trans.quant)
-
-            # Make lists into numpy arrays and save as npz
-            quants = np.array(quants)
-            np.savez_compressed('data/test_db.npz', pids=pids, quants=quants)
-
-            # Evaluate performance
+            # Embed sequences and evaluate performance
+            os.system(f'python scripts/make_db.py -c t30 -l 21 -q {q_1} {q_2}')
             os.system(f'python scripts/eval_pairs.py -d {db} -m dct')
             mets = get_metrics()
 

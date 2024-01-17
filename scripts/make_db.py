@@ -32,7 +32,7 @@ def load_seqs(filename: str) -> dict:
     with open(filename, 'r', encoding='utf8') as file:
         for line in file:
             if line.startswith('>'):
-                pid = line[1:].strip()
+                pid = line[1:].strip().split()[0]  #ex. '>16vpA00    110129010'
                 seqs[pid] = ''
             else:
                 seqs[pid] += line.strip()
