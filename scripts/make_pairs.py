@@ -5,7 +5,7 @@ __date__ = "12/19/23"
 """
 
 import argparse
-from random import sample
+from random import choices
 import regex as re
 from Bio import SeqIO
 
@@ -41,12 +41,16 @@ def get_homs(classes: dict, samp: int) -> list:
     """
 
     # Get homologous pairs
-    pairs = []
+    pairs, weights = [], []
     for _, pids in classes.items():
+        weight = 1 / len(pids)  # Weight for each pair given number of proteins in class
         for i in range(len(pids)):  #pylint: disable=C0200
             for j in range(i + 1, len(pids)):
                 pairs.append((pids[i], pids[j], 1))
-    pairs = sample(pairs, samp)  # Random sample pairs
+                weights.append(weight)
+
+    # Weighted sampling of pairs
+    pairs = choices(pairs, weights, k=samp)
 
     return pairs
 
@@ -64,15 +68,19 @@ def get_nonhoms(classes: dict, samp: int) -> list:
     """
 
     # Get non-homologous pairs
-    pairs = []
+    pairs, weights = [], []
     for i, pids1 in enumerate(classes.values()):
         for j, pids2 in enumerate(classes.values()):
             if i >= j:  # Only need to compare each pair once
                 continue
+            weight = 1/ len(pids2)  # Weight for each pair given "query" class
             for pid1 in pids1:
                 for pid2 in pids2:
-                    pairs.append((pid1, pid2, 0))
-    pairs = sample(pairs, samp)  # Random sample pairs
+                    pairs.append((pid1, pid2, 0, weight))
+                    weights.append(weight)
+
+    # Weighted sampling of pairs
+    pairs = choices(pairs, weights, k=samp)
 
     return pairs
 
@@ -95,8 +103,8 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-f', type=str, default='data/cath_seqs.fa', help='Fasta file')
-    parser.add_argument('-s', type=int, default=250, help='Number of pairs to sample')
+    parser.add_argument('-f', type=str, default='data/scop_seqs.fa', help='Fasta file')
+    parser.add_argument('-s', type=int, default=10000, help='Number of pairs to sample')
     args = parser.parse_args()
 
     # Get classifications and all pairs within and in between
