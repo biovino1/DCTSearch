@@ -1,5 +1,6 @@
-"""Defines the Transform class, which is used to embed protein sequences using the
-ESM-2_t36_3B protein language model and then perform iDCT quantization.
+"""Defines the Fingerprint class, which is used to embed protein sequences using the
+ESM-2_t36_3B protein language model, predict domains, and then perform iDCT quantization
+on each one.
 
 __author__ = "Ben Iovino"
 __date__ = "12/18/23"
@@ -10,6 +11,7 @@ import esm
 import torch
 import numpy as np
 from scipy.fft import dct, idct
+from operator import itemgetter
 
 
 class Model:
@@ -58,13 +60,14 @@ class Model:
 
 
 @dataclass
-class Transform:
-    """This class stores the inverse discrete cosine transform (iDCT) quantization of
+class Fingerprint:
+    """This class stores the inverse discrete cosine transform (iDCT) quantizations of
     an embedded protein sequence.
     """
     pid: str = field(default_factory=str)
     seq: str = field(default_factory=str)
     embed: dict = field(default_factory=dict)
+    contacts: np.array = field(default_factory=list)
     quant: np.array = field(default_factory=list)
 
 
@@ -72,6 +75,7 @@ class Transform:
         """Initialize quant to empty array.
         """
 
+        self.contacts = np.array([])
         self.quant = np.array([])
 
 
@@ -91,14 +95,51 @@ class Transform:
         _, _, batch_tokens = model.tokenizer(embed)
         batch_tokens = batch_tokens.to(device)  # send tokens to gpu
         with torch.no_grad():
-            results = model.encoder(batch_tokens, repr_layers=layers)
+            results = model.encoder(batch_tokens, repr_layers=layers, return_contacts=True)
 
         # Store embedding from each layer
-        embed = {}
+        embeds = {}
         for layer in layers:
             emb = results["representations"][layer].cpu().numpy()
-            embed[layer] = emb[0][1:-1]
-        self.embed = embed
+            embeds[layer] = emb[0][1:-1]  # remove <cls> and <eos>
+        self.embed = embeds
+        self.contacts = results["contacts"].cpu().numpy()
+
+
+    def writece(self, outfile: str, t: float):
+        """write in CE for domain segmentation
+        the top t * L contact pairs, L is the length (t is the alpha parameter in FUpred paper)
+
+        Args:
+            outfile (str): path to output file
+            t (float): threshold for contact map (0.5 to 5)
+        """
+
+        # Sort contacts by confidence
+        slen = len(self.seq)
+        cta = self.contacts.reshape(slen, slen)
+        data = []
+        for i in range(slen - 5):
+            for j in range(i + 5, slen):
+                data.append([cta[i][j], i, j])
+        ct_sorted = sorted(data, key=itemgetter(0), reverse=True)
+
+        # Get top t * L contacts
+        sout = ""
+        tot = int(t * slen)
+        for s in range(tot):
+            i, j = ct_sorted[s][1], ct_sorted[s][2]
+            if not sout:
+                sout = f"CON   {i} {j} {cta[i][j]:.6f}"
+            else:
+                sout += f",{i} {j} {cta[i][j]:.6f}"
+
+        # Write sequence info and top contacts to file
+        with open(outfile, "w", encoding='utf8') as out_f:
+            out_f.write(f"INF   {self.pid} {slen}\n")
+            out_f.write(f"SEQ   {self.seq}\n")
+            out_f.write(f"SS    {'C' * slen}\n")
+            out_f.write(sout + "\n")
 
 
     def scale(self, vec: np.ndarray) -> np.ndarray:
