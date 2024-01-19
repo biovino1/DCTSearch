@@ -7,11 +7,12 @@ __date__ = "12/18/23"
 """
 
 from dataclasses import dataclass, field
+from operator import itemgetter
+import subprocess as sp
 import esm
 import torch
 import numpy as np
 from scipy.fft import dct, idct
-from operator import itemgetter
 
 
 class Model:
@@ -68,7 +69,8 @@ class Fingerprint:
     seq: str = field(default_factory=str)
     embed: dict = field(default_factory=dict)
     contacts: np.array = field(default_factory=list)
-    quant: np.array = field(default_factory=list)
+    domains: list = field(default_factory=list)
+    quants: dict = field(default_factory=dict)
 
 
     def __post_init__(self):
@@ -76,7 +78,6 @@ class Fingerprint:
         """
 
         self.contacts = np.array([])
-        self.quant = np.array([])
 
 
     def esm2_embed(self, model: Model, device: str, layers: list):
@@ -142,6 +143,18 @@ class Fingerprint:
             out_f.write(sout + "\n")
 
 
+    def reccut(self, file: str):
+        """Runs RecCut on a CE file to predict domains.
+
+        Args:
+            file (str): Path to CE file.
+        """
+
+        command = [file, '--input', 'tmp.ce', '--name', f'{self.pid}']
+        result = sp.run(command, stdout=sp.PIPE, text=True, check=True)
+        self.domains = result.stdout.strip().split()[2].split(';')[:-1]
+
+
     def scale(self, vec: np.ndarray) -> np.ndarray:
         """Scale from protsttools. Takes a vector and returns it scaled between 0 and 1.
 
@@ -189,7 +202,17 @@ class Fingerprint:
         # Perform iDCT quantization on each layer
         for i, embed in enumerate(self.embed.values()):
             n_dim, m_dim = qdim[i*2], qdim[i*2+1]
-            dct = self.idct_quant(embed[1:len(embed)-1], n_dim)  #pylint: disable=W0621
-            ddct = self.idct_quant(dct.T, m_dim).T
-            ddct = ddct.reshape(n_dim * m_dim)
-            self.quant = np.append(self.quant, ddct)
+
+            # Quantize each domain
+            for dom in self.domains:
+                beg, end = dom.split('-')
+                dom_emb = embed[int(beg):int(end)+1, :]
+                dct = self.idct_quant(dom_emb[1:len(dom_emb)-1], n_dim)  #pylint: disable=W0621
+                ddct = self.idct_quant(dct.T, m_dim).T
+                ddct = ddct.reshape(n_dim * m_dim)
+                ddct = (ddct*127).astype('int8')
+                self.quants.setdefault(beg, []).extend(ddct.tolist())
+
+        # Set all lists to numpy arrays
+        for key, value in self.quants.items():
+            self.quants[key] = np.array(value)
