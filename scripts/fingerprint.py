@@ -160,7 +160,12 @@ class Fingerprint:
 
         command = ['scripts/RecCut', '--input', file, '--name', f'{self.pid}']
         result = sp.run(command, stdout=sp.PIPE, text=True, check=True)
-        self.domains = result.stdout.strip().split()[2].split(';')[:-1]
+
+        # Append domain boundaries to list
+        domains = result.stdout.strip().split()[2].split(';')[:-1]  # remove last empty string
+        self.domains.append('1-' + str(len(self.seq)))  # full length of protein
+        for dom in domains:
+            self.domains.append(dom)
 
 
     def scale(self, vec: np.ndarray) -> np.ndarray:
@@ -214,23 +219,23 @@ class Fingerprint:
             # Quantize each domain
             for dom in self.domains:
 
-                # Split embedding into domain
+                # Split embedding (0-indexed) into domain (1-indexed)
                 try:
                     beg, end = dom.split('-')
-                    dom_emb = embed[int(beg):int(end)+1, :]
+                    dom_emb = embed[int(beg)-1:int(end), :]
                 except ValueError:  # discontinuous domain
                     dom_emb = np.empty((0, embed.shape[1]))
                     ddom = dom.split(',')
                     for do in ddom:
                         beg, end = do.split('-')
-                        dom_emb = np.append(dom_emb, embed[int(beg):int(end)+1, :], axis=0)
+                        dom_emb = np.append(dom_emb, embed[int(beg)-1:int(end), :], axis=0)
 
                 # Quantize domain
                 dct = self.idct_quant(dom_emb[1:len(dom_emb)-1], n_dim)  #pylint: disable=W0621
                 ddct = self.idct_quant(dct.T, m_dim).T
                 ddct = ddct.reshape(n_dim * m_dim)
                 ddct = (ddct*127).astype('int8')
-                self.quants.setdefault(beg, []).extend(ddct.tolist())
+                self.quants.setdefault(dom, []).extend(ddct.tolist())
 
         # Set all lists to numpy arrays
         for key, value in self.quants.items():
