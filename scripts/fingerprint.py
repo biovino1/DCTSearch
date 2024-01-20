@@ -213,8 +213,19 @@ class Fingerprint:
 
             # Quantize each domain
             for dom in self.domains:
-                beg, end = dom.split('-')
-                dom_emb = embed[int(beg):int(end)+1, :]
+
+                # Split embedding into domain
+                try:
+                    beg, end = dom.split('-')
+                    dom_emb = embed[int(beg):int(end)+1, :]
+                except ValueError:  # discontinuous domain
+                    dom_emb = np.empty((0, embed.shape[1]))
+                    ddom = dom.split(',')
+                    for do in ddom:
+                        beg, end = do.split('-')
+                        dom_emb = np.append(dom_emb, embed[int(beg):int(end)+1, :], axis=0)
+
+                # Quantize domain
                 dct = self.idct_quant(dom_emb[1:len(dom_emb)-1], n_dim)  #pylint: disable=W0621
                 ddct = self.idct_quant(dct.T, m_dim).T
                 ddct = ddct.reshape(n_dim * m_dim)

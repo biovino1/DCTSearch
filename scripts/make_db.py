@@ -1,4 +1,4 @@
-"""Embeds protein sequences using protein language models.
+"""Makes a database of DCT fingerprints from a fasta file of protein sequences.
 
 __author__ = "Ben Iovino"
 __date__ = "12/18/23"
@@ -59,10 +59,15 @@ def get_fprints(seqs, dbfile, layers, qdim, ch):
     idx_count = 0  # index of domains in npz file
     for pid, seq in seqs.items():
 
+        # Skip if too big to embed
+        if len(seq) > 1500:
+            logging.info('%s: Skipping %s, sequence too long', datetime.datetime.now(), pid)
+            continue
+
         # Initialize object and get embeddings for each layer + contact map
         logging.info('%s: Embedding %s', datetime.datetime.now(), pid)
         fprint = Fingerprint(pid=pid, seq=seq)
-        fprint.esm2_embed(model, 'cpu', layers=layers)
+        fprint.esm2_embed(model, device, layers=layers)
         fprint.writece('tmp.ce', 2.6)
         fprint.reccut('tmp.ce')
         fprint.quantize(qdim)
