@@ -10,7 +10,7 @@ import logging
 import os
 import numpy as np
 import torch
-from embed import Model, Transform
+from fingerprint import Model, Fingerprint
 
 log_filename = 'data/logs/make_db.log'  #pylint: disable=C0103
 os.makedirs(os.path.dirname(log_filename), exist_ok=True)
@@ -40,13 +40,13 @@ def load_seqs(filename: str) -> dict:
     return seqs
 
 
-def embed_seqs(seqs: dict, efile: str, layers: list, qdim: list, ch):
-    """Creates DCT fingerprints for a set of protein sequences and saves them as a npz file with
-    two arrays, one for protein IDs and one for fingerprints.
+def get_fprints(seqs, dbfile, layers, qdim, ch):
+    """Creates DCT fingerprints for a fasta file of protein sequences and saves them as a npz file
+    with three arrays, one for protein IDs, one for domain boundaries, and one for fingerprints.
 
     Args:
         seqs (dict): Dictionary of protein sequences
-        efile (str): File to write embeddings to.
+        dbfile (str): File to write fingerprints to.
         layers (list): List of layers to use for embedding.
         qdim (list): List of quantization dimensions.
     """
@@ -55,24 +55,28 @@ def embed_seqs(seqs: dict, efile: str, layers: list, qdim: list, ch):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  # pylint: disable=E1101
     model.to_device(device)
 
-    # Embed and quantize each sequence
-    pids, quants = [], []
+    pids, idx, doms, quants = [], [], [], []
+    idx_count = 0  # index of domains in npz file
     for pid, seq in seqs.items():
 
-        # Initialize object and embed
+        # Initialize object and get embeddings for each layer + contact map
         logging.info('%s: Embedding %s', datetime.datetime.now(), pid)
-        trans = Transform(pid=pid, seq=seq)
-        trans.esm2_embed(model, device, layers=layers)
-        trans.quantize(qdim)
+        fprint = Fingerprint(pid=pid, seq=seq)
+        fprint.esm2_embed(model, 'cpu', layers=layers)
+        fprint.writece('tmp.ce', 2.6)
+        fprint.reccut('tmp.ce')
+        fprint.quantize(qdim)
 
-        # Add protein ID and it's fingerprint to lists for later storage
+        # Save protein ID, domain boundaries, and fingerprints
         pids.append(pid)
-        quants.append(trans.quant)
+        idx.append(idx_count)
+        idx_count += len(fprint.domains)
+        for item in zip(fprint.domains, fprint.quants.values()):
+            doms.append(item[0])
+            quants.append(item[1])
 
-    # Make lists into numpy arrays and save as npz
-    pids = np.array(pids)
-    quants = np.array(quants)
-    np.savez_compressed(efile, pids=pids, quants=quants)
+    # Save as npz
+    np.savez_compressed(dbfile, pids=pids, idx=idx, doms=doms, quants=quants)
 
 
 def main():
@@ -80,17 +84,17 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', type=str, default='t6', help='esm checkpoint')
-    parser.add_argument('-d', type=str, default='data/scop_quants', help='db file to write to')
-    parser.add_argument('-f', type=str, default='data/scop_seqs.fa', help='fasta file to embed')
-    parser.add_argument('-l', type=int, nargs='+', default=[5], help='embedding layers')
-    parser.add_argument('-q', type=int, nargs='+', default=[5, 50],
+    parser.add_argument('-c', type=str, default='t33', help='esm checkpoint')
+    parser.add_argument('-d', type=str, default='test', help='db file to write to')
+    parser.add_argument('-f', type=str, default='test.fa', help='fasta file to embed')
+    parser.add_argument('-l', type=int, nargs='+', default=[13, 25], help='embedding layers')
+    parser.add_argument('-q', type=int, nargs='+', default=[3, 85, 5, 44],
                          help='quantization dimensions, each pair of dimensions quantizes a layer')
     args = parser.parse_args()
 
     # Load sequences from file and embed
     seqs = load_seqs(args.f)
-    embed_seqs(seqs, args.d, args.l, args.q, args.c)
+    get_fprints(seqs, args.d, args.l, args.q, args.c)
 
 
 if __name__ == '__main__':
