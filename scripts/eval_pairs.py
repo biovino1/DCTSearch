@@ -55,6 +55,32 @@ def get_seqs(filename: str) -> dict:
     return seqs
 
 
+def load_fdb(filename: str) -> dict:
+    """Returns a dictionary of DCT fingerprints where each key is a protein id and each value
+    is a list of fingerprints for each domain.
+
+    Args:
+        filename (str): Name of file to parse.
+
+    Returns:
+        dict: Dictionary of DCT fingerprints.
+    """
+
+    fdb = np.load(filename)
+    fprints = {}
+
+    # Get all fingerprints associated with each pid
+    for i, pid in enumerate(fdb['pids']):
+        try:
+            idx = (fdb['idx'][i], fdb['idx'][i+1])
+        except IndexError:  # Last protein in file
+            idx = (fdb['idx'][i], len(fdb['doms']))
+        quants = fdb['quants'][idx[0]:idx[1]]
+        fprints[pid] = quants
+
+    return fprints
+
+
 def dct_search(filename: str, pairs: list):
     """Finds distance between each pair of proteins using the manhattan distance between
     their DCT fingerprints.
@@ -64,15 +90,22 @@ def dct_search(filename: str, pairs: list):
         pairs (list): List of protein pairs.
     """
 
-    # Load DCT fingerprints
-    quantdb = np.load(filename)
-    quants = dict(zip(quantdb['pids'], quantdb['quants']))
+    fprints = load_fdb(filename)
 
-    # Find distance and log
+    # Find most similar fingerprint for each pair of proteins
     for pair in pairs:
-        dist = abs(quants[pair[0]] - quants[pair[1]]).sum()
+        quants1 = fprints[pair[0]]
+        quants2 = fprints[pair[1]]
+
+        # Find similarity between each pair of fingerprints
+        max_sim = 0
+        for q1 in quants1:
+            for q2 in quants2:
+                sim = 1-abs(q1-q2).sum()/17000
+                if sim > max_sim:
+                    max_sim = sim
         logging.info('%s: %s %s %s %s',
-                      datetime.now(), pair[0], pair[1], pair[2], dist)
+                      datetime.now(), pair[0], pair[1], pair[2], max_sim)
 
 
 def write_seq(filename: str, pid: str, seq: str):
