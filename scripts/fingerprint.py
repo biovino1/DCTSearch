@@ -8,6 +8,7 @@ __date__ = "12/18/23"
 
 from dataclasses import dataclass, field
 from operator import itemgetter
+import os
 import subprocess as sp
 import esm
 import torch
@@ -35,16 +36,10 @@ class Model:
         """Loads ESM-2 model.
         """
 
-        if checkpoint == 't36':
-            self.encoder, alphabet = esm.pretrained.esm2_t36_3B_UR50D()
         if checkpoint == 't33':
             self.encoder, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
         if checkpoint == 't30':
             self.encoder, alphabet = esm.pretrained.esm2_t30_150M_UR50D()
-        if checkpoint == 't12':
-            self.encoder, alphabet = esm.pretrained.esm2_t12_35M_UR50D()
-        if checkpoint == 't6':
-            self.encoder, alphabet = esm.pretrained.esm2_t6_8M_UR50D()
 
         self.tokenizer = alphabet.get_batch_converter()
         self.encoder.eval()
@@ -104,7 +99,11 @@ class Fingerprint:
         _, _, batch_tokens = model.tokenizer(embed)
         batch_tokens = batch_tokens.to(device)  # send tokens to gpu
         with torch.no_grad():
-            results = model.encoder(batch_tokens, repr_layers=layers, return_contacts=True)
+            try:
+                results = model.encoder(batch_tokens, repr_layers=layers, return_contacts=True)
+            except RuntimeError:
+                print(f'Error embedding {self.pid}, length {len(self.seq)}')
+                return
 
         # Store embedding from each layer
         embeds = {}
@@ -151,15 +150,19 @@ class Fingerprint:
             out_f.write(sout + "\n")
 
 
-    def reccut(self, file: str):
+    def reccut(self, threshold: float):
         """Runs RecCut on a CE file to predict domains.
 
         Args:
-            file (str): Path to CE file.
+            threshold (float): Threshold for contact maps (0.5 to 5).
         """
 
-        command = ['scripts/RecCut', '--input', file, '--name', f'{self.pid}']
+        # Get top contacts then predict domains
+        filename = 'data/tmp.ce'
+        self.writece(filename, threshold)
+        command = ['scripts/RecCut', '--input', filename, '--name', f'{self.pid}']
         result = sp.run(command, stdout=sp.PIPE, text=True, check=True)
+        os.remove(filename)
 
         # Append domain boundaries to list
         domains = result.stdout.strip().split()[2].split(';')[:-1]  # remove last empty string
