@@ -11,6 +11,7 @@ import os
 import numpy as np
 import torch
 from fingerprint import Model, Fingerprint
+from util import load_seqs
 
 log_filename = 'data/logs/make_db.log'  #pylint: disable=C0103
 os.makedirs(os.path.dirname(log_filename), exist_ok=True)
@@ -18,29 +19,7 @@ logging.basicConfig(filename=log_filename, filemode='w',
                      level=logging.INFO, format='%(message)s')
 
 
-def load_seqs(filename: str) -> dict:
-    """Returns a dictionary of protein sequences from a fasta file.
-
-    Args:
-        filename (str): Name of fasta file to parse.
-    
-    Returns:
-        dict: dictionary where key is protein ID and value is the sequence
-    """
-
-    seqs = {}
-    with open(filename, 'r', encoding='utf8') as file:
-        for line in file:
-            if line.startswith('>'):
-                pid = line[1:].strip().split()[0]  #ex. '>16vpA00    110129010'
-                seqs[pid] = ''
-            else:
-                seqs[pid] += line.strip()
-
-    return seqs
-
-
-def get_fprints(seqs, device, dbfile, layers, qdim):
+def get_fprints(seqs: dict, device: str, dbfile: str, layers: list, qdim: list):
     """Creates DCT fingerprints for a fasta file of protein sequences and saves them as a npz file
     with three arrays, one for protein IDs, one for domain boundaries, and one for fingerprints.
 
@@ -68,7 +47,7 @@ def get_fprints(seqs, device, dbfile, layers, qdim):
         logging.info('%s: Embedding %s', datetime.datetime.now(), pid)
         fprint = Fingerprint(pid=pid, seq=seq)
         fprint.esm2_embed(model, device, layers=layers)
-        if not fprint.embed:
+        if not fprint.embed:  # Skip if embedding failed
             continue
         fprint.reccut(2.6)
         fprint.quantize(qdim)
@@ -89,8 +68,8 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dbfile', type=str, default='test', help='db file to write to')
-    parser.add_argument('--fafile', type=str, default='test.fa', help='fasta file to embed')
+    parser.add_argument('--dbfile', type=str, default='example', help='db file to write to')
+    parser.add_argument('--fafile', type=str, default='example.fasta', help='fasta file to embed')
     parser.add_argument('--gpu', type=bool, default=True, help='gpu (True) or cpu (False)')
     parser.add_argument('--layers', type=int, nargs='+', default=[13, 25], help='embedding layers')
     parser.add_argument('--quantdims', type=int, nargs='+', default=[3, 85, 5, 44],
@@ -101,7 +80,7 @@ def main():
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Load sequences from file and embed
-    seqs = load_seqs(args.f)
+    seqs = load_seqs(args.fafile)
     get_fprints(seqs, device, args.dbfile, args.layers, args.quantdims)
 
 

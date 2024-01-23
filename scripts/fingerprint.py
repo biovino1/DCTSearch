@@ -228,8 +228,8 @@ class Fingerprint:
                     dom_emb = embed[int(beg)-1:int(end), :]
                 except ValueError:  # discontinuous domain
                     dom_emb = np.empty((0, embed.shape[1]))
-                    ddom = dom.split(',')
-                    for do in ddom:
+                    dom = dom.split(',')
+                    for do in dom:
                         beg, end = do.split('-')
                         dom_emb = np.append(dom_emb, embed[int(beg)-1:int(end), :], axis=0)
 

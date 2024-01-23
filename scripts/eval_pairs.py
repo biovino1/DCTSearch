@@ -9,8 +9,8 @@ import logging
 import os
 import subprocess as sp
 from datetime import datetime
-import numpy as np
 import regex as re
+from util import load_fdb
 from Bio import SeqIO
 
 log_filename = 'data/logs/eval_pairs.log'  #pylint: disable=C0103
@@ -53,32 +53,6 @@ def get_seqs(filename: str) -> dict:
         seqs[record.id] = str(record.seq)
 
     return seqs
-
-
-def load_fdb(filename: str) -> dict:
-    """Returns a dictionary of DCT fingerprints where each key is a protein id and each value
-    is a list of fingerprints for each domain.
-
-    Args:
-        filename (str): Name of file to parse.
-
-    Returns:
-        dict: Dictionary of DCT fingerprints.
-    """
-
-    fdb = np.load(filename)
-    fprints = {}
-
-    # Get all fingerprints associated with each pid
-    for i, pid in enumerate(fdb['pids']):
-        try:
-            idx = (fdb['idx'][i], fdb['idx'][i+1])
-        except IndexError:  # Last protein in file
-            idx = (fdb['idx'][i], len(fdb['doms']))
-        quants = fdb['quants'][idx[0]:idx[1]]
-        fprints[pid] = quants
-
-    return fprints
 
 
 def dct_search(filename: str, pairs: list):
