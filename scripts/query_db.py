@@ -5,6 +5,7 @@ __date__ = "12/18/23"
 """
 
 import argparse
+import torch
 from fingerprint import Model, Fingerprint
 from util import load_seqs, load_fdb
 
@@ -41,6 +42,7 @@ def search_db(fprint: dict, fdb: dict):
 
     max_sim = 0
     for pid, quants in fdb.items():
+        print(pid, quants)
         for quant in quants:
             for fp in fprint.values():
                 sim = 1-abs(quant-fp).sum()/17000
@@ -48,7 +50,7 @@ def search_db(fprint: dict, fdb: dict):
                     max_sim = sim
                     max_pid = pid
 
-    print(max_sim, max_pid)
+    print(max_pid, max_sim)
 
 
 def main():
@@ -56,13 +58,19 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--query', default='example_q.fasta', help='Query sequence (fa format)')
-    parser.add_argument('--dbfile', default='example.npz', help='Database of fingerprints')
+    parser.add_argument('--query', required=True, help='Query sequence (fasta)')
+    parser.add_argument('--dbfile', required=True, help='Database of fingerprints (npz)')
+    parser.add_argument('--gpu', default=False, help='gpu (True) or cpu (False)')
     args = parser.parse_args()
+
+    if args.gpu:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    else:
+        device = torch.device('cpu')
 
     # Load query sequence and get fingerprints
     query = load_seqs(args.query)
-    fprint = fprint_query(query, 'cpu')
+    fprint = fprint_query(query, device)
 
     # Load database and search query sequence against db
     fdb = load_fdb(args.dbfile)

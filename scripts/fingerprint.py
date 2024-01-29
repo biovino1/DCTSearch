@@ -166,7 +166,8 @@ class Fingerprint:
 
         # Append domain boundaries to list
         domains = result.stdout.strip().split()[2].split(';')[:-1]  # remove last empty string
-        self.domains.append('1-' + str(len(self.seq)))  # full length of protein
+        if len(domains) > 1:  # If there are multiple domains, add length of full sequence
+            self.domains.append('1-' + str(len(self.seq)))
         for dom in domains:
             self.domains.append(dom)
 
@@ -232,6 +233,7 @@ class Fingerprint:
                     for do in dom:
                         beg, end = do.split('-')
                         dom_emb = np.append(dom_emb, embed[int(beg)-1:int(end), :], axis=0)
+                    dom = ','.join(dom)  # convert back to string for dict key
 
                 # Quantize domain
                 dct = self.idct_quant(dom_emb[1:len(dom_emb)-1], n_dim)  #pylint: disable=W0621

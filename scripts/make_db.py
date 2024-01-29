@@ -68,9 +68,9 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dbfile', type=str, default='example', help='db file to write to')
-    parser.add_argument('--fafile', type=str, default='example.fasta', help='fasta file to embed')
-    parser.add_argument('--gpu', type=bool, default=True, help='gpu (True) or cpu (False)')
+    parser.add_argument('--fafile', type=str, required=True, help='fasta file to embed')
+    parser.add_argument('--dbfile', type=str, required=True, help='db file to write to')
+    parser.add_argument('--gpu', type=bool, default=False, help='gpu (True) or cpu (False)')
     parser.add_argument('--layers', type=int, nargs='+', default=[13, 25], help='embedding layers')
     parser.add_argument('--quantdims', type=int, nargs='+', default=[3, 85, 5, 44],
                          help='quantization dimensions, each pair of dimensions quantizes a layer')
@@ -78,6 +78,8 @@ def main():
 
     if args.gpu:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    else:
+        device = torch.device('cpu')
 
     # Load sequences from file and embed
     seqs = load_seqs(args.fafile)
