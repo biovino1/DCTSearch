@@ -11,16 +11,21 @@ from util import load_seqs, load_fdb
 
 
 def fprint_query(query: dict, device: str) -> dict:
-    """Returns a dictionary of DCT fingerprints for a given protein sequence.
+    """Returns a dictionary of DCT fingerprints for a given collection of protein sequences.
 
     Args:
         query (dict): Dictionary where key is protein ID and value is the sequence.
         device (str): gpu/cpu
+
+    Returns:
+        dict: Nested dictionary where key is protein ID and value is a dictionary of DCT
+        fingerprints for each predicted domain.
     """
 
     model = Model('esm2', 't33')
     model.to_device(device)
 
+    fprints = {}
     for pid, seq in query.items():
         fprint = Fingerprint(pid=pid, seq=seq)
         fprint.esm2_embed(model, device, layers=[15, 23])
@@ -28,30 +33,35 @@ def fprint_query(query: dict, device: str) -> dict:
             continue
         fprint.reccut(2.6)
         fprint.quantize([3, 85, 5, 44])
+        fprints[pid] = fprint.quants
 
-    return fprint.quants
+    return fprints
 
 
-def search_db(fprint: dict, fdb: dict):
-    """Searches a database of DCT fingerprints for most similar protein.
+def search_db(fprints: dict, fdb: dict):
+    """Searches a database of DCT fingerprints for the most similar protein to each query sequence.
 
     Args:
-        fprint (dict): Dictionary of DCT fingerprints for query sequence.
+        fprint (dict): Dictionary of DCT fingerprints for query sequence(s).
         fdb (dict): Dictionary of DCT fingerprints for database.
     """
 
-    max_sim = 0
-    for pid, quants in fdb.items():
-        print(pid, quants)
-        for quant in quants:
-            for fp in fprint.values():
-                sim = 1-abs(quant-fp).sum()/17000
-                if sim > max_sim:
-                    max_sim = sim
-                    max_pid = pid
+    for pid, quants in fprints.items():
+        max_sim, doms = 0, []
+        for db_pid, db_quants in fdb.items():
+            for qdom, quant in quants.items():
+                for dbdom, db_quant in db_quants.items():
+                    sim = 1-abs(quant-db_quant).sum()/17000
+                    if sim > max_sim:
+                        max_sim = sim
+                        max_pid = db_pid
+                        doms = [qdom, dbdom]
 
-    print(max_pid, max_sim)
-
+        print(f'Query: {pid}')
+        print(f'Top Hit: {max_pid}')
+        print(f'Similarity Score: {max_sim}')
+        print(f'Query Region: {doms[0]}')
+        print(f'Top Hit Region: {doms[1]}\n')
 
 def main():
     """Main
@@ -70,11 +80,11 @@ def main():
 
     # Load query sequence and get fingerprints
     query = load_seqs(args.query)
-    fprint = fprint_query(query, device)
+    fprints = fprint_query(query, device)
 
     # Load database and search query sequence against db
     fdb = load_fdb(args.dbfile)
-    search_db(fprint, fdb)
+    search_db(fprints, fdb)
 
 
 if __name__ == '__main__':

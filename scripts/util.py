@@ -8,14 +8,14 @@ import numpy as np
 
 
 def load_fdb(filename: str) -> dict:
-    """Returns a dictionary of DCT fingerprints where each key is a protein id and each value
-    is a list of fingerprints for each domain.
+    """Returns a dictionary of DCT fingerprints from a npz file.
 
     Args:
         filename (str): Name of file to parse.
 
     Returns:
-        dict: Dictionary of DCT fingerprints.
+        dict: Nested dictionary where key is protein ID and value is a dictionary of DCT
+        fingerprints for each predicted domain.
     """
 
     fdb = np.load(filename)
@@ -28,7 +28,8 @@ def load_fdb(filename: str) -> dict:
         except IndexError:  # Last protein in file
             idx = (fdb['idx'][i], len(fdb['doms']))
         quants = fdb['quants'][idx[0]:idx[1]]
-        fprints[pid] = quants
+        doms = fdb['doms'][idx[0]:idx[1]]
+        fprints[pid] = dict(zip(doms, quants))
 
     return fprints
 
