@@ -6,7 +6,8 @@ __date__ = "12/18/23"
 
 import argparse
 import torch
-from fingerprint import Model, Fingerprint
+from embedding import Model, Embedding
+from fingerprint import Fingerprint
 from util import load_seqs, load_fdb
 
 
@@ -22,17 +23,16 @@ def fprint_query(query: dict, device: str) -> dict:
         fingerprints for each predicted domain.
     """
 
-    model = Model('esm2', 't33')
+    model = Model('esm2', 't30')
     model.to_device(device)
 
     fprints = {}
     for pid, seq in query.items():
-        fprint = Fingerprint(pid=pid, seq=seq)
-        fprint.esm2_embed(model, device, layers=[15, 23])
-        if not fprint.embed:
-            continue
+        emb = Embedding(pid=pid, seq=seq)
+        emb.embed_seq(model, device, [15, 21], 1000)
+        fprint = Fingerprint(pid, seq, emb.embed, emb.contacts)
         fprint.reccut(2.6)
-        fprint.quantize([3, 85, 5, 44])
+        fprint.quantize([3, 80, 3, 80])
         fprints[pid] = fprint.quants
 
     return fprints
