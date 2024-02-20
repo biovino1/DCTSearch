@@ -174,3 +174,37 @@ class Fingerprint:
         # Set all lists to numpy arrays
         for key, value in self.quants.items():
             self.quants[key] = np.array(value)
+
+
+    def save(self, filename: str, save_embed: bool = False):
+        """Saves Fingerprint object to npz file.
+
+        Args:
+            filename (str): File to save fingerprints to.
+            save_embed (bool): Save embeddings to file (default: False).
+        """
+
+        if save_embed:
+            np.savez_compressed(filename, pid=self.pid, seq=self.seq, embed=self.embed,
+                                contacts=self.contacts, domains=self.domains, quants=self.quants)
+        else:
+            np.savez_compressed(filename, pid=self.pid, seq=self.seq,
+                                domains=self.domains, quants=self.quants)
+
+
+    def load(self, filename: str):
+        """Loads Fingerprint object from npz file.
+
+        Args:
+            filename (str): File to load fingerprints from.
+        """
+
+        with np.load(filename, allow_pickle=True) as data:
+            self.pid = data['pid']
+            self.seq = data['seq']
+            self.domains = data['domains']
+            self.quants = data['quants']
+            if 'embed' in data.files:
+                self.embed = data['embed']
+            if 'contacts' in data.files:
+                self.contacts = data['contacts']

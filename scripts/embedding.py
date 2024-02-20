@@ -54,6 +54,7 @@ class Model:
 class Embedding:
     """This class creates and stores the necessary information for a protein sequence to be
     embedded. An Embedding is meant to be used in the Fingerprint class for quantization.
+    Embeddings can also be saved and loaded from file (npz).
 
     Attributes:
         pid (str): Protein ID.
@@ -201,8 +202,34 @@ class Embedding:
                 if lay == 'ct':
                     edata[lay] = self.combine_contacts(edata[lay], emb, maxlen-olp, i)
                     continue
-                edata[lay][-olp:] = edata[lay][-olp:] + emb[:olp] / 2
+                edata[lay][-olp:] = (edata[lay][-olp:] + emb[:olp]) / 2
                 edata[lay] = np.concatenate((edata[lay], emb[olp:]), axis=0)
 
         self.embed = {k: v for k, v in edata.items() if k in layers}
         self.contacts = edata['ct']
+
+
+    def save(self, filename: str):
+        """Saves Embedding object to npz file.
+
+        Args:
+            filename (str): File to save embeddings to.
+        """
+
+        np.savez_compressed(filename, pid=self.pid, seq=self.seq,
+                             embeds=self.embed, contacts=self.contacts)
+
+
+    def load(self, filename: str):
+        """Loads Embedding object from npz file.
+
+        Args:
+            filename (str): File to load embeddings from.
+        """
+
+        data = np.load(filename, allow_pickle=True)
+        self.pid = data['pid']
+        self.seq = data['seq']
+        self.embed = data['embeds']
+        self.contacts = data['contacts']
+        data.close()

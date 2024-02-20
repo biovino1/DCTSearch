@@ -30,6 +30,7 @@ def load_fdb(filename: str) -> dict:
         quants = fdb['quants'][idx[0]:idx[1]]
         doms = fdb['doms'][idx[0]:idx[1]]
         fprints[pid] = dict(zip(doms, quants))
+    fdb.close()
 
     return fprints
 
