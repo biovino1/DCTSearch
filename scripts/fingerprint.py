@@ -87,7 +87,7 @@ class Fingerprint:
         """
 
         # Get top contacts then predict domains
-        filename = 'data/tmp.ce'
+        filename = f'data/{self.pid}.ce'
         self.writece(filename, threshold)
         command = ['scripts/RecCut', '--input', filename, '--name', f'{self.pid}']
         result = sp.run(command, stdout=sp.PIPE, text=True, check=True)
@@ -156,7 +156,7 @@ class Fingerprint:
                 try:
                     beg, end = dom.split('-')
                     dom_emb = embed[int(beg)-1:int(end), :]
-                except (TypeError, IndexError):  # discontinuous domain
+                except (TypeError, IndexError, ValueError):  # discontinuous domain
                     dom_emb = np.empty((0, embed.shape[1]))
                     dom = dom.split(',')
                     for do in dom:

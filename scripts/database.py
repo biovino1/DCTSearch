@@ -18,7 +18,7 @@ class Database:
         doms (list): Domain boundaries.
         quants (list): Quantizations.
     """
-    file: str = field(default_factory=None)
+    file: str = field(default_factory=str)
     pids: list = field(default_factory=list)
     idx: list = field(default_factory=list)
     doms: list = field(default_factory=list)
