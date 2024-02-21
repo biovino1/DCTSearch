@@ -8,10 +8,10 @@ import argparse
 import datetime
 import logging
 import os
-import numpy as np
 import torch
 from embedding import Model, Embedding
 from fingerprint import Fingerprint
+from database import Database
 from util import load_seqs
 
 log_filename = 'data/logs/make_db.log'  #pylint: disable=C0103
@@ -21,8 +21,8 @@ logging.basicConfig(filename=log_filename, filemode='w',
 
 
 def get_fprints(seqs: dict, device: str, args: argparse.Namespace):
-    """Creates DCT fingerprints for a fasta file of protein sequences and saves them as a npz file
-    with three arrays, one for protein IDs, one for domain boundaries, and one for fingerprints.
+    """Creates DCT fingerprints for a fasta file of protein sequences, adds them to a database, and
+    saves the database to a file.
 
     Args:
         seqs (dict): Dictionary of protein sequences
@@ -33,27 +33,19 @@ def get_fprints(seqs: dict, device: str, args: argparse.Namespace):
     model = Model('esm2', 't30')  # pLM encoder and tokenizer
     model.to_device(device)
 
-    pids, idx, doms, quants = [], [], [], []
-    idx_count = 0  # index of domains in npz file
+    db = Database()
     for pid, seq in seqs.items():
 
         # Initialize object and get embeddings for each layer + contact map
-        logging.info('%s: Embedding %s', datetime.datetime.now(), pid)
+        logging.info('%s: Fingerprinting %s %s', datetime.datetime.now(), pid, len(seq))
         emb = Embedding(pid=pid, seq=seq)
         emb.embed_seq(model, device, args.layers, args.maxlen)
         fprint = Fingerprint(pid=pid, seq=seq, embed=emb.embed, contacts=emb.contacts)
         fprint.reccut(2.6)
         fprint.quantize(args.quantdims)
+        db.add_fprint(fprint)
 
-        # Save protein ID, domain boundaries, and fingerprints
-        pids.append(pid)
-        idx.append(idx_count)
-        idx_count += len(fprint.domains)
-        for item in zip(fprint.domains, fprint.quants.values()):
-            doms.append(item[0])
-            quants.append(item[1])
-
-    np.savez_compressed(args.dbfile, pids=pids, idx=idx, doms=doms, quants=quants)
+    db.save_db(args.dbfile)
 
 
 def main():

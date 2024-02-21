@@ -156,7 +156,7 @@ class Fingerprint:
                 try:
                     beg, end = dom.split('-')
                     dom_emb = embed[int(beg)-1:int(end), :]
-                except TypeError:  # discontinuous domain
+                except (TypeError, IndexError):  # discontinuous domain
                     dom_emb = np.empty((0, embed.shape[1]))
                     dom = dom.split(',')
                     for do in dom:
