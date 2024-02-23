@@ -55,3 +55,42 @@ def load_seqs(filename: str) -> dict:
                 seqs[pid] += line.strip()
 
     return seqs
+
+
+def yield_seqs(filename: str, maxlen: int):
+    """Yields a dictionary of protein sequences from a fasta file with a total number of amino
+    acids less than maxlen.
+
+    Args:
+        filename (str): Name of fasta file to parse.
+        maxlen (int): Maximum length of total sequence to yield.
+
+    Returns:
+        dict: dictionary where key is protein ID and value is the sequence
+    """
+
+    seqs, curr_len = {}, 0
+    file = open(filename, 'r', encoding='utf8')  # less nested than with statement
+    for line in file:
+        if line.startswith('>'):
+
+            # If dict is too large, yield all but last and reset
+            if len(seqs) > 1 and curr_len > maxlen:
+                last_seq = seqs.popitem()
+                yield seqs
+                curr_len = len(last_seq[1])
+                seqs = {last_seq[0]: last_seq[1]}
+
+            # Add new sequence to dict
+            pid = line[1:].strip().split()[0]
+            seqs[pid] = ''
+        else:
+            curr_len += len(line.strip())
+            seqs[pid] += line.strip()
+
+    # Last batch in file may be too large
+    if len(seqs) > 1 and curr_len > maxlen:
+        last_seq = seqs.popitem()
+        yield seqs
+    yield {last_seq[0]: last_seq[1]}
+    file.close()
