@@ -35,12 +35,13 @@ def get_fprint(seq: tuple, model: Model, device: str, args: argparse.Namespace):
         Fingerprint: Fingerprint object containing DCT fingerprints
     """
 
-
-    # Embed and fingerprint sequence
+    # Embedding
     pid, seq = seq[0], seq[1]
     nowt = time.time()
     emb = Embedding(pid=pid, seq=seq)
     emb.embed_seq(model, device, args.layers, args.maxlen)
+
+    # Fingerprint
     fprint = Fingerprint(pid=pid, seq=seq, embed=emb.embed, contacts=emb.contacts)
     fprint.reccut(2.6)
     fprint.quantize(args.quantdims)

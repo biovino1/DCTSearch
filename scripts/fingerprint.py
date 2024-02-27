@@ -63,6 +63,8 @@ class Fingerprint:
         # Get top t * L contacts
         sout = ""
         tot = int(t * slen)
+        if tot > len(ct_sorted):  # If sequence is too small for t * L contacts, use all contacts
+            tot = len(ct_sorted)
         for s in range(tot):
             i, j = ct_sorted[s][1], ct_sorted[s][2]
             if not sout:
