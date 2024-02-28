@@ -138,6 +138,32 @@ class Fingerprint:
         return trans.T  #pylint: disable=E1101
 
 
+    def get_doms(self, embed: np.ndarray, dom: str) -> np.ndarray:
+        """Splits a domain string and returns embedding for corresponding region.
+        
+        Args:
+            embed (np.ndarray): Embedding to split.
+            dom (str): Domain string.
+            
+        Returns:
+            np.ndarray: Embedding for domain.
+        """
+
+        # Embedding (0-indexed) into domain (1-indexed)
+        try:
+            beg, end = dom.split('-')
+            dom_emb = embed[int(beg)-1:int(end), :]
+        except (TypeError, IndexError, ValueError):  # discontinuous domain
+            dom_emb = np.empty((0, embed.shape[1]))
+            dom = dom.split(',')
+            for do in dom:
+                beg, end = do.split('-')
+                dom_emb = np.append(dom_emb, embed[int(beg)-1:int(end), :], axis=0)
+            dom = ','.join(dom)  # convert back to string for dict key
+
+        return dom_emb
+
+
     def quantize(self, qdim: list):
         """quant2D from protsttools. Takes an embedding(s) and returns the flattened iDCT
         quantization on both axes.
@@ -153,20 +179,7 @@ class Fingerprint:
 
             # Quantize each domain
             for dom in self.domains:
-
-                # Split embedding (0-indexed) into domain (1-indexed)
-                try:
-                    beg, end = dom.split('-')
-                    dom_emb = embed[int(beg)-1:int(end), :]
-                except (TypeError, IndexError, ValueError):  # discontinuous domain
-                    dom_emb = np.empty((0, embed.shape[1]))
-                    dom = dom.split(',')
-                    for do in dom:
-                        beg, end = do.split('-')
-                        dom_emb = np.append(dom_emb, embed[int(beg)-1:int(end), :], axis=0)
-                    dom = ','.join(dom)  # convert back to string for dict key
-
-                # Quantize domain
+                dom_emb = self.get_doms(embed, dom)
                 dct = self.idct_quant(dom_emb[1:len(dom_emb)-1], n_dim)  #pylint: disable=W0621
                 ddct = self.idct_quant(dct.T, m_dim).T
                 ddct = ddct.reshape(n_dim * m_dim)

@@ -57,13 +57,15 @@ def load_seqs(filename: str) -> dict:
     return seqs
 
 
-def yield_seqs(filename: str, maxlen: int):
+def yield_seqs(filename: str, maxlen: int, dim1: int = 3, dim2: int = 80):
     """Yields a dictionary of protein sequences from a fasta file with a total number of amino
     acids less than maxlen.
 
     Args:
         filename (str): Name of fasta file to parse.
         maxlen (int): Maximum length of total sequence to yield.
+        dim1 (int): First dimension of quantization.
+        dim2 (int): Second dimension of quantization.
 
     Returns:
         dict: dictionary where key is protein ID and value is the sequence
@@ -86,6 +88,8 @@ def yield_seqs(filename: str, maxlen: int):
             seqs[pid] = ''
         else:
             curr_len += len(line.strip())
+            if (curr_len-2 * dim2) < (dim1*dim2):  # Ignore VERY short seqs (depends on quant dims)
+                continue
             seqs[pid] += line.strip()
 
     # Last batch in file may be too large
