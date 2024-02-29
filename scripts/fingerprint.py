@@ -180,7 +180,10 @@ class Fingerprint:
             # Quantize each domain
             for dom in self.domains:
                 dom_emb = self.get_doms(embed, dom)
-                dct = self.idct_quant(dom_emb[1:len(dom_emb)-1], n_dim)  #pylint: disable=W0621
+                try:
+                    dct = self.idct_quant(dom_emb[1:len(dom_emb)-1], n_dim)  #pylint: disable=W0621
+                except ValueError:  # unknown error
+                    print(f'Error quantizing {self.pid} {dom}')
                 ddct = self.idct_quant(dct.T, m_dim).T
                 ddct = ddct.reshape(n_dim * m_dim)
                 ddct = (ddct*127).astype('int8')
