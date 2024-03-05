@@ -147,18 +147,17 @@ class Embedding:
             torch.Tensor: Matrix of combined contacts (n+inc x n+inc).
         """
 
-        # Create new matrices to store combined contacts
-        mlen = len(mat1)
+        # Create new tensors to store combined contacts
+        mlen = mat1.size(0)
         size = mlen + inc
-        zeros1 = np.zeros((size, size))
-        zeros2 = np.zeros((size, size))
+        zeros1 = torch.zeros((size, size), device=mat1.device)
+        zeros2 = torch.zeros((size, size), device=mat1.device)
 
-        # Add input matrices to new matrices
-        olp = inc*times
+        # Add input tensors to new tensors
+        olp = inc * times
         zeros1[:mlen, :mlen] = mat1
-        zeros2[:len(mat2), :len(mat2)] = mat2
-        zeros2 = np.roll(zeros2, olp, axis = 0)
-        zeros2 = np.roll(zeros2, olp, axis = 1)
+        zeros2[:mat2.size(0), :mat2.size(1)] = mat2
+        zeros2 = torch.roll(zeros2, shifts=(olp,olp), dims=(0, 1))
 
         # Average the overlapping indices
         zeros1[olp:mlen, olp:mlen] = (zeros1[olp:mlen, olp:mlen] + zeros2[olp:mlen, olp:mlen]) / 2
@@ -168,8 +167,8 @@ class Embedding:
         zeros1[mlen:size, olp:mlen] = zeros2[mlen:size, olp:mlen]
 
         # If any row or column is all 0's, remove it
-        zeros1 = zeros1[~np.all(zeros1 == 0, axis=1)]
-        zeros1 = zeros1[:, ~np.all(zeros1 == 0, axis=0)]
+        zeros1 = zeros1[~torch.all(zeros1 == 0, dim=1)]
+        zeros1 = zeros1[:, ~torch.all(zeros1 == 0, dim=0)]
 
         return zeros1
 
@@ -208,32 +207,6 @@ class Embedding:
 
         self.embed = {k: v.cpu().numpy() for k, v in edata.items() if k in layers}
         self.contacts = edata['ct'].cpu().numpy()
-
-
-    def save(self, filename: str):
-        """Saves Embedding object to npz file.
-
-        Args:
-            filename (str): File to save embeddings to.
-        """
-
-        np.savez_compressed(filename, pid=self.pid, seq=self.seq,
-                             embeds=self.embed, contacts=self.contacts)
-
-
-    def load(self, filename: str):
-        """Loads Embedding object from npz file.
-
-        Args:
-            filename (str): File to load embeddings from.
-        """
-
-        data = np.load(filename, allow_pickle=True)
-        self.pid = data['pid']
-        self.seq = data['seq']
-        self.embed = data['embeds']
-        self.contacts = data['contacts']
-        data.close()
 
 
 @dataclass
