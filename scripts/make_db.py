@@ -55,7 +55,7 @@ def fprint_cpu(batch: list, args: argparse.Namespace) -> list:
     return results
 
 
-def queue_gpu(rank: int, queue: mp.Queue, args: argparse.Namespace):
+def queue_gpu(rank: int, queue: mp.Queue, args: argparse.Namespace, db: list):
     """Moves through queue of sequences to fingerprint and add to database.
 
     :param rank: GPU to load model on
@@ -69,7 +69,7 @@ def queue_gpu(rank: int, queue: mp.Queue, args: argparse.Namespace):
     model.to_device(device)
 
     # Embed batches of sequences
-    cpu_queue, results = [], []
+    cpu_queue = []
     while True:
         seqs = queue.get()
         if seqs is None:
@@ -81,9 +81,12 @@ def queue_gpu(rank: int, queue: mp.Queue, args: argparse.Namespace):
         for emb in batch.embeds:
             fp = Fingerprint(pid=emb.pid, seq=emb.seq, embed=emb.embed, contacts=emb.contacts)
             cpu_queue.append(fp)
-        if len(cpu_queue) >= args.cpu:
+
+        # If queue is full, start multiprocess fingerprinting
+        if len(cpu_queue) >= args.cpu/args.gpu:
             fps = fprint_cpu(cpu_queue, args)
-            results.extend(fps)
+            for fp in fps:
+                db.append(fp)
             cpu_queue = []
 
 
@@ -95,9 +98,10 @@ def embed_gpu(args: argparse.Namespace):
     """
 
     mp_queue = mp.Queue()
+    shared_db = mp.Manager().list()  # shared list for fingerprint objects
     processes = []
     for rank in range(args.gpu):
-        proc = mp.Process(target=queue_gpu, args=(rank, mp_queue, args))
+        proc = mp.Process(target=queue_gpu, args=(rank, mp_queue, args, shared_db))
         proc.start()
         processes.append(proc)
     for seqs in yield_seqs(args.fafile, args.maxlen):
@@ -106,6 +110,12 @@ def embed_gpu(args: argparse.Namespace):
         mp_queue.put(None)
     for proc in processes:
         proc.join()
+
+    # Add fingerprints to database and save
+    database = Database()
+    for fp in shared_db:
+        database.add_fprint(fp)
+    database.save_db(args.dbfile)
 
 
 def embed_cpu(args: argparse.Namespace):
@@ -129,9 +139,11 @@ def embed_cpu(args: argparse.Namespace):
         for emb in batch.embeds:
             fp = Fingerprint(pid=emb.pid, seq=emb.seq, embed=emb.embed, contacts=emb.contacts)
             cpu_queue.append(fp)
-        if len(cpu_queue) >= args.cpu:
+
+        # If queue is full, start multiprocess fingerprinting
+        if len(cpu_queue) >= args.cpu/args.gpu:
             fps = fprint_cpu(cpu_queue, args)
-            for fp in fps:
+            for fp in fps:  # add each fp to db
                 db.add_fprint(fp)
             cpu_queue = []
 
