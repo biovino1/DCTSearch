@@ -10,6 +10,7 @@ import logging
 import os
 import torch
 import torch.multiprocessing as mp
+from multiprocessing import Pool
 from embedding import Model, Batch
 from fingerprint import Fingerprint
 from database import Database
@@ -21,43 +22,37 @@ logging.basicConfig(filename=log_filename, filemode='w',
                      level=logging.INFO, format='%(message)s')
 
 
-def queue_cpu(cpu_queue: mp.Queue, args: argparse.Namespace):
-    """Moves through queue of Fingerprints and quantizes their embeddings.
+def queue_cpu(fp: Fingerprint, args: argparse.Namespace) -> Fingerprint:
+    """Predicts domains and quantizes embeddings on cpu. Returns Fingerprint.
 
     Args:
         queue (mp.Queue): Queue of embeddings to fingerprint
         args (argparse.Namespace): Command line arguments
+
+    Returns:
+        Fingerprint: Fingerprint object with quantized domains.
     """
 
-    while True:
-        fp = cpu_queue.get()
-        if fp is None:
-            break
-        fp.reccut(2.6)
-        fp.quantize(args.quantdims)
-        logging.info(f'{datetime.datetime.now()} Fingerprinted {fp.pid}')
+    fp.reccut(2.6)
+    fp.quantize(args.quantdims)
+    logging.info(f'{datetime.datetime.now()} Fingerprinted {fp.pid}')
+
+    return fp
 
 
-def fprint_cpu(batch: list, args: argparse.Namespace):
-    """Puts batches of Fingerprints in queue to be quantized on cpu(s).
+def fprint_cpu(batch: list, args: argparse.Namespace) -> list:
+    """Puts batches of Fingerprints in queue to be quantized on cpu(s). Returns a list of
+    Fingerprint objects with quantized domains.
 
     Args:
         batch (list): List of fingerprints to quantize
         args (argparse.Namespace): Command line arguments
     """
 
-    cpu_queue = mp.Queue()
-    processes = []
-    for _ in batch:
-        proc = mp.Process(target=queue_cpu, args=(cpu_queue, args))
-        proc.start()
-        processes.append(proc)
-    for fp in batch:
-        cpu_queue.put(fp)
-    for _ in range(len(batch)):  # send None to each process to signal end of queue
-        cpu_queue.put(None)
-    for proc in processes:
-        proc.join()
+    with Pool(processes=args.cpu) as pool:
+        results = pool.starmap(queue_cpu, [(fp, args) for fp in batch])
+    
+    return results
 
 
 def queue_gpu(rank: int, queue: mp.Queue, args: argparse.Namespace):
@@ -74,7 +69,7 @@ def queue_gpu(rank: int, queue: mp.Queue, args: argparse.Namespace):
     model.to_device(device)
 
     # Embed batches of sequences
-    cpu_queue = []
+    cpu_queue, results = [], []
     while True:
         seqs = queue.get()
         if seqs is None:
@@ -87,7 +82,8 @@ def queue_gpu(rank: int, queue: mp.Queue, args: argparse.Namespace):
             fp = Fingerprint(pid=emb.pid, seq=emb.seq, embed=emb.embed, contacts=emb.contacts)
             cpu_queue.append(fp)
         if len(cpu_queue) >= args.cpu:
-            fprint_cpu(cpu_queue, args)
+            fps = fprint_cpu(cpu_queue, args)
+            results.extend(fps)
             cpu_queue = []
 
 
@@ -124,7 +120,7 @@ def embed_cpu(args: argparse.Namespace):
     model.to_device(device)
     
     # Embed one sequence at a time (batching on cpu is very slow)
-    cpu_queue = []
+    cpu_queue, db = [], Database()
     for seqs in yield_seqs(args.fafile, 1):
         batch = Batch(seqs, model, device)
         batch.embed_batch(args.layers, args.maxlen)
@@ -134,8 +130,12 @@ def embed_cpu(args: argparse.Namespace):
             fp = Fingerprint(pid=emb.pid, seq=emb.seq, embed=emb.embed, contacts=emb.contacts)
             cpu_queue.append(fp)
         if len(cpu_queue) >= args.cpu:
-            fprint_cpu(cpu_queue, args)
+            fps = fprint_cpu(cpu_queue, args)
+            for fp in fps:
+                db.add_fprint(fp)
             cpu_queue = []
+
+    db.save_db(args.dbfile)
 
 
 def main():
