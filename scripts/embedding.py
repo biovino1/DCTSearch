@@ -133,9 +133,8 @@ class Embedding:
     def combine_contacts(self, mat1: torch.Tensor, mat2: torch.Tensor, inc: int, times: int) -> torch.Tensor:
         """Returns a larger square matrix combining two smaller square matrices.
 
-        mat1 has values starting from the top left corner, mat2 has values starting from the bottom
-        right corner, and the overlapping indices are averaged. The number of overlapping indices is
-        determine by the inc argument.
+        Mat1 and mat2 are both square matrices. New matrix (mat3) is of size (n+m, n+m) where
+        n and m are the dimensions of mat1 and mat2. Overlapping indices are averaged.
 
         Args:
             mat1 (torch.Tensor): Running matrix of contacts (n x n).
@@ -147,30 +146,18 @@ class Embedding:
             torch.Tensor: Matrix of combined contacts (n+inc x n+inc).
         """
 
-        # Create new tensors to store combined contacts
-        mlen = mat1.size(0)
-        size = mlen + inc
-        zeros1 = torch.zeros((size, size), device=mat1.device)
-        zeros2 = torch.zeros((size, size), device=mat1.device)
-
-        # Add input tensors to new tensors
+        # Add space to mat1
         olp = inc * times
-        zeros1[:mlen, :mlen] = mat1
-        zeros2[:mat2.size(0), :mat2.size(1)] = mat2
-        zeros2 = torch.roll(zeros2, shifts=(olp,olp), dims=(0, 1))
+        mlen1, mlen2 = mat1.size(0), mat2.size(0)
+        mlen3 = olp + mlen2
+        new_mat = torch.zeros((mlen3, mlen3), device=mat1.device)
+        new_mat[:mlen1, :mlen1] = mat1
 
-        # Average the overlapping indices
-        zeros1[olp:mlen, olp:mlen] = (zeros1[olp:mlen, olp:mlen] + zeros2[olp:mlen, olp:mlen]) / 2
+        # Add mat2 to new_mat
+        new_mat[olp:mlen3, olp:mlen3] = new_mat[olp:mlen3, olp:mlen3] + mat2
+        new_mat[olp:mlen1, olp:mlen1] = new_mat[olp:mlen1, olp:mlen1] / 2
 
-        # Add rest of zeros2 to zeros1
-        zeros1[olp:size, mlen:size] = zeros2[olp:size, mlen:size]
-        zeros1[mlen:size, olp:mlen] = zeros2[mlen:size, olp:mlen]
-
-        # If any row or column is all 0's, remove it
-        zeros1 = zeros1[~torch.all(zeros1 == 0, dim=1)]
-        zeros1 = zeros1[:, ~torch.all(zeros1 == 0, dim=0)]
-
-        return zeros1
+        return new_mat
 
 
     def embed_seq(self, model: Model, device: str, layers: list, maxlen: int):
