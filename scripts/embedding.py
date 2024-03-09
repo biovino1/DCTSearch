@@ -1,11 +1,11 @@
-"""Defines the Model and Embedding classes, which are used to embed protein sequences using ESM-2
-protein language models.
+"""Defines the Model, Embedding, and Batch classes, which are used to embed protein sequences.
 
 __author__ = "Ben Iovino"
 __date__ = "2/19/24"
 """
 
 from dataclasses import dataclass, field
+import os
 import esm
 import torch
 import numpy as np
@@ -56,8 +56,7 @@ class Model:
 @dataclass
 class Embedding:
     """This class stores the necessary information for a protein sequence to be embedded.
-    An Embedding is meant to be used in the Fingerprint class for quantization. Embeddings
-    can also be saved and loaded from file (npz).
+    An Embedding is meant to be used in the Fingerprint class for quantization.
 
     Attributes:
         pid (str): Protein ID.
@@ -199,12 +198,14 @@ class Embedding:
 @dataclass
 class Batch:
     """This class embeds a batch of protein sequences. Sequences can be embedded one at a time, but
-    parallel embedding of multiple sequences can be faster.
+    parallel embedding of multiple sequences can be faster if using a GPU. The embedding of single
+    sequences is handled by methods in the Embedding class.
 
     Attributes:
         seqs (list): List of tuples containing (protein id, sequence)
         model (Model): Model object containing encoder, alphabet, and tokenizer
         device (str): gpu/cpu
+        embeds (list): List of Embedding objects
     """
     seqs: list = field(default_factory=list)
     model: Model = field(default_factory=Model)
@@ -261,3 +262,19 @@ class Batch:
             emb.contacts = results["contacts"][i][:batch_lens[i]-2, :batch_lens[i]-2].cpu().numpy()
             self.embeds.append(emb)
         
+
+    def save_batch(self, direc: str):
+        """Saves individual embeddings to the given directory
+
+        Args:
+            filename (str): Name of file to save embeddings to.
+        """
+
+        if not self.embeds:
+            print('No embeddings to save')
+            return
+        if not os.path.exists(direc):
+            os.makedirs(direc)
+        for emb in self.embeds:
+            np.savez_compressed(f'{direc}/{emb.pid}', pid=emb.pid,
+                                 seq=emb.seq, embed=emb.embed, contacts=emb.contacts)

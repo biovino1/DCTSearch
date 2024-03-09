@@ -141,7 +141,7 @@ def embed_cpu(args: argparse.Namespace):
             cpu_queue.append(fp)
 
         # If queue is full, start multiprocess fingerprinting
-        if len(cpu_queue) >= args.cpu/args.gpu:
+        if len(cpu_queue) >= args.cpu:
             fps = fprint_cpu(cpu_queue, args)
             for fp in fps:  # add each fp to db
                 db.add_fprint(fp)
