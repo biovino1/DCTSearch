@@ -6,6 +6,8 @@ __date__ = "3/18/24"
 
 import sqlite3
 import os
+import numpy as np
+from io import BytesIO
 
 
 class Database:
@@ -25,13 +27,15 @@ class Database:
             path (str): Path to database file.
         """
 
-        self.path = path
-        if '.fa' in self.path:
-            seqs = self.read_fasta()
-            self.init_db(seqs)
-        else:
+        # Check for .db file
+        if os.path.exists(f'{os.path.splitext(path)[0]}.db'):
+            self.path = f'{os.path.splitext(path)[0]}.db'
             self.conn = sqlite3.connect(self.path)
             self.cur = self.conn.cursor()
+        else:
+            self.path = path
+            seqs = self.read_fasta()
+            self.init_db(seqs)
 
     
     def close(self):
@@ -103,8 +107,9 @@ class Database:
         """
 
         seqs, curr_len, min_size = [], 0, dim1*dim2
-        select = """ SELECT pid, sequence, length FROM sequences WHERE domains == ''"""
-        for row in self.cur.execute(select):
+        select = """ SELECT pid, sequence, length FROM sequences WHERE domains = '' """
+        rows = self.cur.execute(select).fetchall()
+        for row in rows:
             pid, seq, length = row
             if (length-2) * dim2 < min_size:  # Short sequences can't be quantized
                 continue
@@ -123,3 +128,21 @@ class Database:
             last_seq = seqs.pop()
             yield seqs
         yield [(last_seq[0], last_seq[1])]
+
+
+    def add_fprint(self, fp):
+        """Adds domains and fingerprints to database.
+
+        Args:
+            fp (Fingerprint): Fingerprint object to add to database.
+        """
+
+        doms = ', '.join([str(x) for x in fp.domains])
+        quants = np.array([fp.quants[dom] for dom in fp.domains])
+        quants_bytes = BytesIO()
+        np.save(quants_bytes, quants, allow_pickle=True)
+
+        # Update database with domains as a string and fingerprints as a blob
+        update = """ UPDATE sequences SET domains = ?, fingerprint = ? WHERE pid = ? """
+        self.cur.execute(update, (doms, quants_bytes.getvalue(), fp.pid))
+        self.conn.commit()

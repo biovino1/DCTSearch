@@ -118,11 +118,12 @@ def embed_gpu(args: argparse.Namespace):
     database.save_db(args.dbfile)
 
 
-def embed_cpu(args: argparse.Namespace):
+def embed_cpu(args: argparse.Namespace, db: Database):
     """Embeds sequences on cpu.
     
     Args:
         args (argparse.Namespace): Command line arguments
+        db (Database): Database object connected to SQLite database
     """
 
     model = Model('esm2', 't30')
@@ -130,8 +131,8 @@ def embed_cpu(args: argparse.Namespace):
     model.to_device(device)
     
     # Embed one sequence at a time (batching on cpu is very slow)
-    cpu_queue, db = [], Database()
-    for seqs in yield_seqs(args.fafile, 1):
+    cpu_queue = []
+    for seqs in db.yield_seqs(1):
         batch = Batch(seqs, model, device)
         batch.embed_batch(args.layers, args.maxlen)
 
@@ -144,10 +145,16 @@ def embed_cpu(args: argparse.Namespace):
         if len(cpu_queue) >= args.cpu:
             fps = fprint_cpu(cpu_queue, args)
             for fp in fps:  # add each fp to db
+                print(fp.domains)
                 db.add_fprint(fp)
             cpu_queue = []
 
-    db.save_db(args.dbfile)
+    # Last batch
+    if cpu_queue:
+        fps = fprint_cpu(cpu_queue, args)
+        for fp in fps:
+            db.add_fprint(fp)
+    db.close()
 
 
 def main():
@@ -172,10 +179,11 @@ def main():
                          help='quantization dimensions, each pair of dimensions quantizes a layer')
     args = parser.parse_args()
 
+    db = Database(args.fafile)
     if args.gpu:
         embed_gpu(args)
     else:
-        embed_cpu(args)
+        embed_cpu(args, db)
 
 
 if __name__ == '__main__':
