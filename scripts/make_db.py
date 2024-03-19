@@ -172,7 +172,7 @@ def main():
                          help='quantization dimensions, each pair of dimensions quantizes a layer')
     args = parser.parse_args()
 
-    db = Database(args.fafile)
+    db = Database(args.dbfile, args.fafile)
     if args.gpu:
         embed_gpu(args, db)
     else:

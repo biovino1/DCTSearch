@@ -20,21 +20,24 @@ class Database:
     """
 
 
-    def __init__(self, path: str):
+    def __init__(self, dbfile: str, fafile: str = None):
         """Initializes database file and cursor. Will create new database if fasta file is given.
         
         Args:
-            path (str): Path to database file.
+            dbfile (str): Path to database file.
+            fafile (str): Path to fasta file.
         """
 
-        # Check for .db file
-        if os.path.exists(f'{os.path.splitext(path)[0]}.db'):
-            self.path = f'{os.path.splitext(path)[0]}.db'
+        # Check for .db file first
+        if os.path.exists(f'{os.path.splitext(dbfile)[0]}.db'):
+            print(f'Using existing database: {os.path.splitext(dbfile)[0]}.db')
+            self.path = f'{os.path.splitext(dbfile)[0]}.db'
             self.conn = sqlite3.connect(self.path)
             self.cur = self.conn.cursor()
         else:
-            self.path = path
-            seqs = self.read_fasta()
+            print(f'Creating new database: {os.path.splitext(dbfile)[0]}.db')
+            self.path = dbfile
+            seqs = self.read_fasta(fafile)
             self.init_db(seqs)
 
     
@@ -45,15 +48,19 @@ class Database:
         self.conn.close()
 
 
-    def read_fasta(self) -> dict:
-        """Returns a dictionary of sequences from a fasta file.
+    def read_fasta(self, fafile: str) -> dict:
+        """Returns a dictionary of sequences from a fasta file. They are sorted by lenth to
+        optimize fingerprinting.
+
+        Args:
+            fafile (str): Path to fasta file.
 
         Returns:
             dict: Dictionary of sequences.
         """
 
         seqs = {}
-        with open(self.path, 'r', encoding='utf8') as f:
+        with open(fafile, 'r', encoding='utf8') as f:
             for line in f:
                 if line.startswith('>'):
                     pid = line.strip().split()[0]

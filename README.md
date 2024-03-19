@@ -24,6 +24,8 @@ To create a database of DCT fingerprints for which you can query against, run th
 python scripts/make_db.py --fafile <.fa file> --dbfile <output>
 ```
 
+This will generate a SQLite database file with one table containing a protein id, sequence, list of domains, and DCT fingerprints for each sequence in the fasta file. If the process is interrupted for any reason, you can restart it and the script will skip any sequences that have already had fingerprints generated.
+
 ### Embedding and Fingerprinting Protein Sequences
 Embedding protein sequences can be a memory-intensive process. To allow for the embedding of very large sequences, we split any sequence larger than the '--maxlen' parameter into overlapping windows and embed each window separately. The final embedding is a a concatenation of each window's embedding and the overlapping segments are averaged together. The default value for '--maxlen' is 1000, but you can change this parameter to a larger or smaller value depending on your system's memory constraints. If you would like to use a GPU to embed your protein sequences, you can specify the number of GPUs with the '--gpu' parameter, otherwise it will default to using the CPU to embed sequences.
 
