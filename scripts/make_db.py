@@ -108,7 +108,7 @@ def embed_gpu(args: argparse.Namespace, db: Database):
         proc = mp.Process(target=queue_gpu, args=(rank, mp_queue, args, db))
         proc.start()
         processes.append(proc)
-    for seqs in db.yield_seqs(args.maxlen):
+    for seqs in db.yield_seqs(args.maxlen, args.cpu):
         mp_queue.put(seqs)
     for _ in range(args.gpu):  # send None to each process to signal end of queue
         mp_queue.put(None)
@@ -130,7 +130,7 @@ def embed_cpu(args: argparse.Namespace, db: Database):
     
     # Embed one sequence at a time (batching on cpu is very slow)
     cpu_queue = []
-    for seqs in db.yield_seqs(1):
+    for seqs in db.yield_seqs(1, args.cpu):
         batch = Batch(seqs, model, device)
         batch.embed_batch(args.layers, args.maxlen)
 

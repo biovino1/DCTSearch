@@ -94,11 +94,12 @@ class Database:
         self.conn.commit()
 
 
-    def yield_seqs(self, maxlen: int, dim1: int = 3, dim2: int = 80):
+    def yield_seqs(self, maxlen: int, cpu: int, dim1: int = 3, dim2: int = 80):
         """Yields sequences from the database.
 
         Args:
             maxlen (int): Maximum length of total sequence to yield
+            cpu (int): Number of cpu cores to use (consequently, hard maximum of seqs to yield)
             dim1 (int): First dimension of quantization.
             dim2 (int): Second dimension of quantization.
 
@@ -115,8 +116,8 @@ class Database:
                 continue
             curr_len += length
 
-            # If list is too large, yield all but last and reset
-            if len(seqs) > 1 and curr_len > maxlen:
+            # If list is too large (length/number of seqs), yield and reset
+            if (len(seqs) > 1 and curr_len > maxlen) or len(seqs) > cpu:
                 last_seq = seqs.pop()
                 yield seqs
                 curr_len = len(last_seq[1])
@@ -127,7 +128,12 @@ class Database:
         if len(seqs) > 1 and curr_len > maxlen:
             last_seq = seqs.pop()
             yield seqs
-        yield [(last_seq[0], last_seq[1])]
+
+        # Yield unless there are no sequences selected from database
+        try:
+            yield [(last_seq[0], last_seq[1])]
+        except UnboundLocalError:
+            print('No sequences to fingerprint!')
 
 
     def add_fprint(self, fp):

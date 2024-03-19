@@ -24,13 +24,13 @@ To create a database of DCT fingerprints for which you can query against, run th
 python scripts/make_db.py --fafile <.fa file> --dbfile <output>
 ```
 
-### Embedding Protein Sequences
-Embedding protein sequences can be a memory-intensive process. To allow for the embedding of very large sequences, we split any sequence larger than the '--maxlen' parameter into overlapping windows and embed each window separately. The final embedding is a a concatenation of each window's embedding and the overlapping segments are averaged together. The default value for '--maxlen' is 1000, but you can change this parameter to a larger or smaller value depending on your system's memory constraints.
+### Embedding and Fingerprinting Protein Sequences
+Embedding protein sequences can be a memory-intensive process. To allow for the embedding of very large sequences, we split any sequence larger than the '--maxlen' parameter into overlapping windows and embed each window separately. The final embedding is a a concatenation of each window's embedding and the overlapping segments are averaged together. The default value for '--maxlen' is 1000, but you can change this parameter to a larger or smaller value depending on your system's memory constraints. If you would like to use a GPU to embed your protein sequences, you can specify the number of GPUs with the '--gpu' parameter, otherwise it will default to using the CPU to embed sequences.
 
-If you would like to use a GPU to embed your protein sequences, you can add '--gpu True' to the above command, otherwise it will default to using the CPU. If you have multiple GPUs, you can specificy one or multiple devices to utilize with the '--gpulist' parameter. An example is shown below using cuda devices 0 and 1:
+Generating fingerprints from these embeddings is much less memory intensive, but is performed only on the CPU. You can specify the number of CPU cores to use with the '--cpu' parameter to fingerprint multiple sequences at once. For example, the command below will embed sequences on one GPU and fingerprint them on 12 CPU cores:
 
 ```
-python scripts/make_db.py --fafile <.fa file> --dbfile <output> --gpu True --gpulist 0 1
+python scripts/make_db.py --fafile <.fa file> --dbfile <output> --gpu 1 --cpu 12
 ```
 
 ## Querying a DCT Fingerprint Database
