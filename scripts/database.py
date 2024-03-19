@@ -35,10 +35,13 @@ class Database:
             self.conn = sqlite3.connect(self.path)
             self.cur = self.conn.cursor()
         else:
-            print(f'Creating new database: {os.path.splitext(dbfile)[0]}.db')
-            self.path = dbfile
-            seqs = self.read_fasta(fafile)
-            self.init_db(seqs)
+            if fafile:
+                print(f'Creating new database: {os.path.splitext(dbfile)[0]}.db')
+                self.path = dbfile
+                seqs = self.read_fasta(fafile)
+                self.init_db(seqs)
+            else:
+                print('No database file found. Provide a fasta file to create a new database.')
 
     
     def close(self):
@@ -63,7 +66,7 @@ class Database:
         with open(fafile, 'r', encoding='utf8') as f:
             for line in f:
                 if line.startswith('>'):
-                    pid = line.strip().split()[0]
+                    pid = line.strip().split()[0][1:]
                     seqs[pid] = ''
                 else:
                     seqs[pid] += line.strip()
@@ -159,3 +162,51 @@ class Database:
         update = """ UPDATE sequences SET domains = ?, fingerprint = ? WHERE pid = ? """
         self.cur.execute(update, (doms, quants_bytes.getvalue(), fp.pid))
         self.conn.commit()
+
+
+    def db_info(self):
+        """Prints information about the database.
+        """
+
+        # Number of sequences
+        select = """ SELECT COUNT(*) FROM sequences """
+        num_seqs = self.cur.execute(select).fetchone()[0]
+        print(f'Number of sequences: {num_seqs}')
+
+        # Average sequence length
+        select = """ SELECT AVG(length) FROM sequences """
+        avg_len = self.cur.execute(select).fetchone()[0]
+        print(f'Average sequence length: {avg_len:.2f}')
+
+        # Number of domains in the database
+        select = """ SELECT domains FROM sequences WHERE domains != '' """
+        domains = self.cur.execute(select).fetchall()
+        if domains == []:
+            print('No domains in database')
+            return
+        domains = [len(x[0].split(', ')) for x in domains]
+        print(f'Number of fingerprints: {np.sum(domains)} ({len(domains)}/{num_seqs} sequences)')
+
+
+    def seq_info(self, seq: str):
+        """Prints information about a specific sequence.
+
+        Args:
+            seq (str): Protein ID of sequence in database.
+        """
+
+        # Get sequence length and domains
+        print(f'Protein ID: {seq}')
+        select = """ SELECT sequence, domains FROM sequences WHERE pid = ? """
+        try:
+            sequence, domains = self.cur.execute(select, (seq,)).fetchone()
+        except TypeError:
+            print('Sequence not found in database')
+            return
+        
+        # Print information
+        print(f'Sequence: {sequence}')
+        if domains:
+            print(f'Domains: {domains}')
+        else:
+            print('No domains in database')
