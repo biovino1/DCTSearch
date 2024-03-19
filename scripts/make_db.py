@@ -14,11 +14,10 @@ from multiprocessing import Pool
 from embedding import Model, Batch
 from fingerprint import Fingerprint
 from database import Database
-from util import yield_seqs
 
 log_filename = 'data/logs/make_db.log'  #pylint: disable=C0103
 os.makedirs(os.path.dirname(log_filename), exist_ok=True)
-logging.basicConfig(filename=log_filename, filemode='w',
+logging.basicConfig(filename=log_filename, filemode='a',
                      level=logging.INFO, format='%(message)s')
 
 
@@ -40,27 +39,29 @@ def queue_cpu(fp: Fingerprint, args: argparse.Namespace) -> Fingerprint:
     return fp
 
 
-def fprint_cpu(batch: list, args: argparse.Namespace) -> list:
+def fprint_cpu(batch: list, args: argparse.Namespace, db: Database):
     """Puts batches of Fingerprints in queue to be quantized on cpu(s). Returns a list of
     Fingerprint objects with quantized domains.
 
     Args:
         batch (list): List of fingerprints to quantize
         args (argparse.Namespace): Command line arguments
+        db (Database): Database object connected to SQLite database
     """
 
     with Pool(processes=args.cpu) as pool:
         results = pool.starmap(queue_cpu, [(fp, args) for fp in batch])
-    
-    return results
+    for fp in results:
+        db.add_fprint(fp)
 
 
-def queue_gpu(rank: int, queue: mp.Queue, args: argparse.Namespace, db: list):
+def queue_gpu(rank: int, queue: mp.Queue, args: argparse.Namespace, db: Database):
     """Moves through queue of sequences to fingerprint and add to database.
 
     :param rank: GPU to load model on
     :param queue: queue of families to embed and transform
     :param args: explained in main()
+    :param db: Database object connected to SQLite database
     """
 
     # Load tokenizer and encoder
@@ -84,38 +85,35 @@ def queue_gpu(rank: int, queue: mp.Queue, args: argparse.Namespace, db: list):
 
         # If queue is full, start multiprocess fingerprinting
         if len(cpu_queue) >= args.cpu/args.gpu:
-            fps = fprint_cpu(cpu_queue, args)
-            for fp in fps:
-                db.append(fp)
+            fprint_cpu(cpu_queue, args, db)
             cpu_queue = []
 
+    # Last batch if queue is not full
+    if cpu_queue:
+        fprint_cpu(cpu_queue, args, db)
+    db.close()
 
-def embed_gpu(args: argparse.Namespace):
+
+def embed_gpu(args: argparse.Namespace, db: Database):
     """Puts batches of sequences in queue to be embedded on gpu(s).
 
     Args:
         args (argparse.Namespace): Command line arguments
+        db (Database): Database object connected to SQLite database
     """
 
     mp_queue = mp.Queue()
-    shared_db = mp.Manager().list()  # shared list for fingerprint objects
     processes = []
     for rank in range(args.gpu):
-        proc = mp.Process(target=queue_gpu, args=(rank, mp_queue, args, shared_db))
+        proc = mp.Process(target=queue_gpu, args=(rank, mp_queue, args, db))
         proc.start()
         processes.append(proc)
-    for seqs in yield_seqs(args.fafile, args.maxlen):
+    for seqs in db.yield_seqs(args.maxlen):
         mp_queue.put(seqs)
     for _ in range(args.gpu):  # send None to each process to signal end of queue
         mp_queue.put(None)
     for proc in processes:
         proc.join()
-
-    # Add fingerprints to database and save
-    database = Database()
-    for fp in shared_db:
-        database.add_fprint(fp)
-    database.save_db(args.dbfile)
 
 
 def embed_cpu(args: argparse.Namespace, db: Database):
@@ -143,17 +141,12 @@ def embed_cpu(args: argparse.Namespace, db: Database):
 
         # If queue is full, start multiprocess fingerprinting
         if len(cpu_queue) >= args.cpu:
-            fps = fprint_cpu(cpu_queue, args)
-            for fp in fps:  # add each fp to db
-                print(fp.domains)
-                db.add_fprint(fp)
+            fprint_cpu(cpu_queue, args, db)
             cpu_queue = []
 
-    # Last batch
+    # Last batch if queue is not full
     if cpu_queue:
-        fps = fprint_cpu(cpu_queue, args)
-        for fp in fps:
-            db.add_fprint(fp)
+        fprint_cpu(cpu_queue, args, db)
     db.close()
 
 
@@ -181,7 +174,7 @@ def main():
 
     db = Database(args.fafile)
     if args.gpu:
-        embed_gpu(args)
+        embed_gpu(args, db)
     else:
         embed_cpu(args, db)
 
