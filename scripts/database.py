@@ -168,6 +168,22 @@ class Database:
         self.conn.commit()
 
 
+    def load_fprints(self) -> dict:
+        """Returns a dictionary of fingerprints from the database.
+
+        Returns:
+            dict: Dictionary of fingerprints where key is protein ID and value is np.array of
+                  fingerprints.
+        """
+
+        select = """ SELECT pid, fingerprints FROM sequences WHERE fpcount > 0 """
+        self.cur.execute(select)
+        pids, fingerprints = zip(*self.cur.fetchall())
+        fingerprints = [np.load(BytesIO(fp), allow_pickle=True) for fp in fingerprints]
+
+        return dict(zip(pids, fingerprints))
+
+
     def db_info(self):
         """Prints information about the database.
         """

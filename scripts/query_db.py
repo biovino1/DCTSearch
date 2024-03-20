@@ -1,91 +1,96 @@
-"""Queries a database of DCT fingerprints for most similar protein
+"""Queries a database of DCT fingerprints for most similar protein to each query sequence.
 
 __author__ = "Ben Iovino"
-__date__ = "12/18/23"
+__date__ = "3/19/23"
 """
 
 import argparse
-import torch
+import os
 from embedding import Model, Embedding
 from fingerprint import Fingerprint
-from util import load_seqs, load_fdb
+from database import Database
+from make_db import embed_cpu, embed_gpu
 
 
-def fprint_query(query: dict, device: str) -> dict:
-    """Returns a dictionary of DCT fingerprints for a given collection of protein sequences.
+def compare_fprints(qfp: list, dfp: list) -> float:
+    """Compares two sets of fingerprints and returns the highest similarity score between
+    all pairs.
 
     Args:
-        query (dict): Dictionary where key is protein ID and value is the sequence.
-        device (str): gpu/cpu
+        qfp (list): List of query fingerprints
+        dfp (list): List of database fingerprints
 
     Returns:
-        dict: Nested dictionary where key is protein ID and value is a dictionary of DCT
-        fingerprints for each predicted domain.
+        float: Similarity score
     """
 
-    model = Model('esm2', 't30')
-    model.to_device(device)
-
-    fprints = {}
-    for pid, seq in query.items():
-        emb = Embedding(pid=pid, seq=seq)
-        emb.embed_seq(model, device, [15, 21], 1000)
-        fprint = Fingerprint(pid, seq, emb.embed, emb.contacts)
-        fprint.reccut(2.6)
-        fprint.quantize([3, 80, 3, 80])
-        fprints[pid] = fprint.quants
-
-    return fprints
+    max_sim = 0
+    for q in qfp:
+        for d in dfp:
+            sim = 1-abs(q-d).sum()/17000
+            if sim > max_sim:
+                max_sim = sim
+    return max_sim
 
 
-def search_db(fprints: dict, fdb: dict):
+def search_db(query_db: str, fp_db: str):
     """Searches a database of DCT fingerprints for the most similar protein to each query sequence.
 
     Args:
-        fprint (dict): Dictionary of DCT fingerprints for query sequence(s).
-        fdb (dict): Dictionary of DCT fingerprints for database.
+        query_db (str): Name of query database
+        fp_db (str): Name of fingerprint database
     """
 
-    for pid, quants in fprints.items():
-        max_sim, doms = 0, []
-        for db_pid, db_quants in fdb.items():
-            for qdom, quant in quants.items():
-                for dbdom, db_quant in db_quants.items():
-                    sim = 1-abs(quant-db_quant).sum()/17000
-                    if sim > max_sim:
-                        max_sim = sim
-                        max_pid = db_pid
-                        doms = [qdom, dbdom]
+    # Connect to databases
+    query_db = Database(query_db)
+    query_db.db_info()
+    fp_db = Database(fp_db)
+    fp_db.db_info()
 
-        print(f'Query: {pid}')
-        print(f'Top Hit: {max_pid}')
-        print(f'Similarity Score: {max_sim}')
-        print(f'Query Region: {doms[0]}')
-        print(f'Top Hit Region: {doms[1]}\n')
+    # Load fingerprints
+    query_fps = query_db.load_fprints()
+    db_fps = fp_db.load_fprints()
+
+    # Compare fingerprints
+    for query, qfp in query_fps.items():
+        max_sim, max_pid = 0, ''
+        for db, dfp in db_fps.items():
+            sim = compare_fprints(qfp, dfp)
+            if sim > max_sim:
+                max_sim = sim
+                max_pid = db
+
+        print(f'{query} is most similar to {max_pid} with a similarity score of {max_sim}')
+    print()
+
+    query_db.close()
+    fp_db.close()
+
 
 def main():
-    """Main
+    """Processes sequences same as make_db.py and queries --dbfile for most similar sequence for
+    each sequence in the query database.
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--query', required=True, help='Query sequence (fasta)')
-    parser.add_argument('--dbfile', required=True, help='Database of fingerprints (npz)')
-    parser.add_argument('--gpu', default=False, help='gpu (True) or cpu (False)')
+    parser.add_argument('--fafile', type=str, required=True, help='query file (.fa)')
+    parser.add_argument('--dbfile', type=str, required=True, help='fingerprint database (.db)')
+    parser.add_argument('--maxlen', type=int, default=1000, help='max sequence length to embed')
+    parser.add_argument('--cpu', type=int, default=1, help='number of cpus to use')
+    parser.add_argument('--gpu', type=int, default=False, help='number of gpus to use')
     args = parser.parse_args()
 
+    # Embed query sequences
+    query_db = os.path.splitext(args.fafile)[0]
+    db = Database(query_db, args.fafile)
     if args.gpu:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        embed_gpu(args, db)
     else:
-        device = torch.device('cpu')
+        embed_cpu(args, db)
 
-    # Load query sequence and get fingerprints
-    query = load_seqs(args.query)
-    fprints = fprint_query(query, device)
-
-    # Load database and search query sequence against db
-    fdb = load_fdb(args.dbfile)
-    search_db(fprints, fdb)
-
+    # Query database for most similar sequence
+    search_db(query_db, args.dbfile)
+   
 
 if __name__ == '__main__':
     main()
