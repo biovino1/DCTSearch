@@ -157,7 +157,10 @@ class Fingerprint:
             dom_emb = np.empty((0, embed.shape[1]))
             dom = dom.split(',')
             for do in dom:
-                beg, end = do.split('-')
+                try:
+                    beg, end = do.split('-')
+                except (TypeError, IndexError, ValueError):  # UNKNOWN RECCUT ERROR
+                    print(f'RecCut Error with {self.pid}, {dom}')
                 dom_emb = np.append(dom_emb, embed[int(beg)-1:int(end), :], axis=0)
             dom = ','.join(dom)  # convert back to string for dict key
 

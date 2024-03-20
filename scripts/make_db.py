@@ -33,7 +33,7 @@ def queue_cpu(fp: Fingerprint, args: argparse.Namespace) -> Fingerprint:
     """
 
     fp.reccut(2.6)
-    fp.quantize(args.quantdims)
+    fp.quantize([3, 80, 3, 80])
     logging.info(f'{datetime.datetime.now()} Fingerprinted {fp.pid}')
 
     return fp
@@ -76,7 +76,7 @@ def queue_gpu(rank: int, queue: mp.Queue, args: argparse.Namespace, db: Database
         if seqs is None:
             break
         batch = Batch(seqs, model, device)
-        batch.embed_batch(args.layers, args.maxlen)
+        batch.embed_batch([15, 21], args.maxlen)
 
         # Create Fingerprint object and add to queue
         for emb in batch.embeds:
@@ -132,7 +132,7 @@ def embed_cpu(args: argparse.Namespace, db: Database):
     cpu_queue = []
     for seqs in db.yield_seqs(1, args.cpu):
         batch = Batch(seqs, model, device)
-        batch.embed_batch(args.layers, args.maxlen)
+        batch.embed_batch([15, 21], args.maxlen)
 
         # Create Fingerprint object and add to queue
         for emb in batch.embeds:
@@ -167,9 +167,6 @@ def main():
     parser.add_argument('--maxlen', type=int, default=1000, help='max sequence length to embed')
     parser.add_argument('--cpu', type=int, default=1, help='number of cpus to use')
     parser.add_argument('--gpu', type=int, required=False, help='number of gpus to use')
-    parser.add_argument('--layers', type=int, nargs='+', default=[15, 21], help='embedding layers')
-    parser.add_argument('--quantdims', type=int, nargs='+', default=[3, 80, 3, 80],
-                         help='quantization dimensions, each pair of dimensions quantizes a layer')
     args = parser.parse_args()
 
     db = Database(args.dbfile, args.fafile)

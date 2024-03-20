@@ -8,6 +8,7 @@ import sqlite3
 import os
 import numpy as np
 from io import BytesIO
+from fingerprint import Fingerprint
 
 
 class Database:
@@ -30,7 +31,7 @@ class Database:
 
         # Check for .db file first
         if os.path.exists(f'{os.path.splitext(dbfile)[0]}.db'):
-            print(f'Using existing database: {os.path.splitext(dbfile)[0]}.db')
+            print(f'Opening existing database: {os.path.splitext(dbfile)[0]}.db')
             self.path = f'{os.path.splitext(dbfile)[0]}.db'
             self.conn = sqlite3.connect(self.path)
             self.cur = self.conn.cursor()
@@ -48,6 +49,7 @@ class Database:
         """Closes the database connection.
         """
 
+        print(f'Closing database: {self.path}\n')
         self.conn.close()
 
 
@@ -92,15 +94,16 @@ class Database:
                 sequence text NOT NULL,
                 length integer NOT NULL,
                 domains text,
-                fingerprint blob
+                fpcount integer,
+                fingerprints blob
                 ); """
         self.cur.execute(table)
 
         # Insert sequences
-        insert = """ INSERT INTO sequences(pid, sequence, length, domains, fingerprint)
-            VALUES(?, ?, ?, ?, ?) """
+        insert = """ INSERT INTO sequences(pid, sequence, length, domains, fpcount, fingerprints)
+            VALUES(?, ?, ?, ?, ?, ?) """
         for pid, seq in seqs.items():
-            self.cur.execute(insert, (pid, seq, len(seq), '', None))
+            self.cur.execute(insert, (pid, seq, len(seq), '', 0, None))
         self.conn.commit()
 
 
@@ -146,7 +149,7 @@ class Database:
             print('No sequences to fingerprint!')
 
 
-    def add_fprint(self, fp):
+    def add_fprint(self, fp: Fingerprint):
         """Adds domains and fingerprints to database.
 
         Args:
@@ -159,8 +162,9 @@ class Database:
         np.save(quants_bytes, quants, allow_pickle=True)
 
         # Update database with domains as a string and fingerprints as a blob
-        update = """ UPDATE sequences SET domains = ?, fingerprint = ? WHERE pid = ? """
-        self.cur.execute(update, (doms, quants_bytes.getvalue(), fp.pid))
+        update = """ UPDATE sequences SET domains = ?, \
+                        fpcount = ?, fingerprints = ? WHERE pid = ? """
+        self.cur.execute(update, (doms, len(fp.domains), quants_bytes.getvalue(), fp.pid))
         self.conn.commit()
 
 
@@ -179,13 +183,9 @@ class Database:
         print(f'Average sequence length: {avg_len:.2f}')
 
         # Number of domains in the database
-        select = """ SELECT domains FROM sequences WHERE domains != '' """
-        domains = self.cur.execute(select).fetchall()
-        if domains == []:
-            print('No domains in database')
-            return
-        domains = [len(x[0].split(', ')) for x in domains]
-        print(f'Number of fingerprints: {np.sum(domains)} ({len(domains)}/{num_seqs} sequences)')
+        select = """ SELECT SUM(fpcount), COUNT(*) FROM sequences WHERE fpcount > 0 """
+        nom_dom, dom_seqs = self.cur.execute(select).fetchone()
+        print(f'Number of fingerprints: {nom_dom} ({dom_seqs}/{num_seqs} sequences)\n')
 
 
     def seq_info(self, seq: str):
@@ -201,12 +201,12 @@ class Database:
         try:
             sequence, domains = self.cur.execute(select, (seq,)).fetchone()
         except TypeError:
-            print('Sequence not found in database')
+            print('Sequence not found in database\n')
             return
         
         # Print information
         print(f'Sequence: {sequence}')
         if domains:
-            print(f'Domains: {domains}')
+            print(f'Domains: {domains}\n')
         else:
-            print('No domains in database')
+            print('No domains in database\n')
