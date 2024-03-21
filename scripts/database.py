@@ -146,7 +146,10 @@ class Database:
         try:
             yield [(last_seq[0], last_seq[1])]
         except UnboundLocalError:
-            print('No sequences to fingerprint!')
+            if seqs:  # only one sequence in fasta/database
+                yield seqs
+            else:
+                print('No sequences to fingerprint!')
 
 
     def add_fprint(self, fp: Fingerprint):

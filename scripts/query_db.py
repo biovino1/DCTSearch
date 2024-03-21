@@ -6,13 +6,11 @@ __date__ = "3/19/23"
 
 import argparse
 import os
-from embedding import Model, Embedding
-from fingerprint import Fingerprint
 from database import Database
 from make_db import embed_cpu, embed_gpu
 
 
-def compare_fprints(qfp: list, dfp: list) -> float:
+def compare_fprints(qfp: list, dfp: list) -> tuple:
     """Compares two sets of fingerprints and returns the highest similarity score between
     all pairs.
 
@@ -21,16 +19,17 @@ def compare_fprints(qfp: list, dfp: list) -> float:
         dfp (list): List of database fingerprints
 
     Returns:
-        float: Similarity score
+        tuple (float, tuple): max sim, (query dom index, database dom index)
     """
 
-    max_sim = 0
-    for q in qfp:
-        for d in dfp:
+    max_sim, doms = 0, ()
+    for i, q in enumerate(qfp):
+        for j, d in enumerate(dfp):
             sim = 1-abs(q-d).sum()/17000
             if sim > max_sim:
                 max_sim = sim
-    return max_sim
+                doms = (i, j)
+    return max_sim, doms
 
 
 def search_db(query_db: str, fp_db: str):
@@ -53,15 +52,20 @@ def search_db(query_db: str, fp_db: str):
 
     # Compare fingerprints
     for query, qfp in query_fps.items():
-        max_sim, max_pid = 0, ''
+        max_sim, max_pid, doms = 0, '', ()
         for db, dfp in db_fps.items():
-            sim = compare_fprints(qfp, dfp)
+            sim, doms = compare_fprints(qfp, dfp)
             if sim > max_sim:
-                max_sim = sim
-                max_pid = db
-
-        print(f'{query} is most similar to {max_pid} with a similarity score of {max_sim}')
-    print()
+                max_sim, max_pid, max_doms = sim, db, doms
+        
+        # Print matches
+        select = 'SELECT domains FROM sequences WHERE pid = ? '
+        db_doms = fp_db.cur.execute(select, (max_pid,)).fetchone()[0]
+        query_doms = query_db.cur.execute(select, (query,)).fetchone()[0]
+        db_doms, query_doms = db_doms.split(', '), query_doms.split(', ')
+        print(f'Query: {query}, {query_doms[max_doms[0]]}\n'
+              f'Match: {max_pid}, {db_doms[max_doms[1]]}\n'
+              f'Similarity: {max_sim:.2f}\n')
 
     query_db.close()
     fp_db.close()
@@ -73,7 +77,7 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--fafile', type=str, required=True, help='query file (.fa)')
+    parser.add_argument('--query', type=str, required=True, help='can be .fa or .db file')
     parser.add_argument('--dbfile', type=str, required=True, help='fingerprint database (.db)')
     parser.add_argument('--maxlen', type=int, default=1000, help='max sequence length to embed')
     parser.add_argument('--cpu', type=int, default=1, help='number of cpus to use')
@@ -81,8 +85,8 @@ def main():
     args = parser.parse_args()
 
     # Embed query sequences
-    query_db = os.path.splitext(args.fafile)[0]
-    db = Database(query_db, args.fafile)
+    query_db = os.path.splitext(args.query)[0]
+    db = Database(query_db, args.query)
     if args.gpu:
         embed_gpu(args, db)
     else:
