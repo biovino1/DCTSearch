@@ -147,7 +147,6 @@ def embed_cpu(args: argparse.Namespace, db: Database):
     # Last batch if queue is not full
     if cpu_queue:
         fprint_cpu(cpu_queue, args, db)
-    db.close()
 
 
 def main():
@@ -174,6 +173,7 @@ def main():
         embed_gpu(args, db)
     else:
         embed_cpu(args, db)
+    db.close()
 
 
 if __name__ == '__main__':

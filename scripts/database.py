@@ -88,22 +88,30 @@ class Database:
         self.conn = sqlite3.connect(f'{self.path}.db')
         self.cur = self.conn.cursor()
 
-        # Create table
+        # Create table for protein sequences
         table = """CREATE TABLE sequences (
                 pid text PRIMARY KEY,
                 sequence text NOT NULL,
                 length integer NOT NULL,
-                domains text,
-                fpcount integer,
-                fingerprints blob
+                fpcount integer NOT NULL
+                ); """
+        self.cur.execute(table)
+
+        # Create table for domain fingerprints
+        table = """CREATE TABLE fingerprints (
+                vid integer PRIMARY KEY,
+                domain text NOT NULL,
+                fingerprint blob NOT NULL,
+                pid text NOT NULL,
+                FOREIGN KEY(pid) REFERENCES sequences(pid)
                 ); """
         self.cur.execute(table)
 
         # Insert sequences
-        insert = """ INSERT INTO sequences(pid, sequence, length, domains, fpcount, fingerprints)
-            VALUES(?, ?, ?, ?, ?, ?) """
+        insert = """ INSERT INTO sequences(pid, sequence, length, fpcount)
+            VALUES(?, ?, ?, ?) """
         for pid, seq in seqs.items():
-            self.cur.execute(insert, (pid, seq, len(seq), '', 0, None))
+            self.cur.execute(insert, (pid, seq, len(seq), 0))
         self.conn.commit()
 
 
@@ -121,7 +129,7 @@ class Database:
         """
 
         seqs, curr_len, min_size = [], 0, dim1*dim2
-        select = """ SELECT pid, sequence, length FROM sequences WHERE domains = '' """
+        select = """ SELECT pid, sequence, length FROM sequences WHERE fpcount = 0 """
         rows = self.cur.execute(select).fetchall()
         for row in rows:
             pid, seq, length = row
@@ -159,32 +167,49 @@ class Database:
             fp (Fingerprint): Fingerprint object to add to database.
         """
 
-        doms = ', '.join([str(x) for x in fp.domains])
+        # Convert quantizations to bytes for db storage
         quants = np.array([fp.quants[dom] for dom in fp.domains])
         quants_bytes = BytesIO()
         np.save(quants_bytes, quants, allow_pickle=True)
 
-        # Update database with domains as a string and fingerprints as a blob
-        update = """ UPDATE sequences SET domains = ?, \
-                        fpcount = ?, fingerprints = ? WHERE pid = ? """
-        self.cur.execute(update, (doms, len(fp.domains), quants_bytes.getvalue(), fp.pid))
-        self.conn.commit()
+        # Update sequences table with number of fingerprints to keep track of progress
+        update = """ UPDATE sequences SET fpcount = ? WHERE pid = ? """
+        self.cur.execute(update, (len(fp.domains), fp.pid))
+
+        # Get id of last fingerprint in database
+        select = "SELECT vid FROM fingerprints ORDER BY vid DESC LIMIT 1"
+        try:
+            vid = self.cur.execute(select).fetchone()[0] + 1
+        except TypeError:
+            vid = 1
+
+        # Add each domain and it's fingerprint to the fingerprints table
+        insert = """ INSERT INTO fingerprints(vid, domain, fingerprint, pid)
+            VALUES(?, ?, ?, ?) """
+        for i, (dom, quant) in enumerate(zip(fp.domains, quants)):
+            print(vid+i, dom, quant.shape)
+            quants_bytes = BytesIO()
+            np.save(quants_bytes, quant, allow_pickle=True)
+            self.cur.execute(insert, (vid+i, dom, quants_bytes.getvalue(), fp.pid))
+        self.conn.commit()  
 
 
-    def load_fprints(self) -> dict:
-        """Returns a dictionary of fingerprints from the database.
+    def load_fprints(self) -> list:
+        """Loads fingerprints from database.
 
         Returns:
-            dict: Dictionary of fingerprints where key is protein ID and value is np.array of
-                  fingerprints.
+            list: List of numpy arrays
         """
 
-        select = """ SELECT pid, fingerprints FROM sequences WHERE fpcount > 0 """
-        self.cur.execute(select)
-        pids, fingerprints = zip(*self.cur.fetchall())
-        fingerprints = [np.load(BytesIO(fp), allow_pickle=True) for fp in fingerprints]
+        select = """ SELECT vid, fingerprint FROM fingerprints """
+        rows = self.cur.execute(select).fetchall()
+        fprints = []
+        for row in rows:
+            vid, fprint = row
+            fprint = np.load(BytesIO(fprint), allow_pickle=True)
+            fprints.append((vid, fprint))
 
-        return dict(zip(pids, fingerprints))
+        return fprints
 
 
     def db_info(self):
@@ -214,18 +239,22 @@ class Database:
             seq (str): Protein ID of sequence in database.
         """
 
-        # Get sequence length and domains
+        # Get sequence from sequences table
         print(f'Protein ID: {seq}')
-        select = """ SELECT sequence, domains FROM sequences WHERE pid = ? """
+        select = """ SELECT sequence FROM sequences WHERE pid = ? """
         try:
-            sequence, domains = self.cur.execute(select, (seq,)).fetchone()
+            sequence = self.cur.execute(select, (seq,)).fetchone()[0]
         except TypeError:
             print('Sequence not found in database\n')
             return
         
+        # Get domains from fingerprints table
+        select = """ SELECT domain FROM fingerprints WHERE pid = ? """
+        domains = self.cur.execute(select, (seq,)).fetchall()
+        
         # Print information
         print(f'Sequence: {sequence}')
         if domains:
-            print(f'Domains: {domains}\n')
+            print(f'Domains: {", ".join([dom[0] for dom in domains])}\n')
         else:
             print('No domains in database\n')
