@@ -80,6 +80,10 @@ class Database:
     def init_db(self, seqs: dict):
         """Creates a new database file and fills table with sequences.
 
+        Sequences table is primarily used for taking protein sequences to create the fingerprints
+        table. Fingerprints are stored in a separate table to allow ease of access when searching
+        using FAISS which returns the indices of the fingerprints in a flat numpy array.
+
         Args:
             seqs (dict): Dictionary of sequences.
         """
@@ -187,28 +191,35 @@ class Database:
         insert = """ INSERT INTO fingerprints(vid, domain, fingerprint, pid)
             VALUES(?, ?, ?, ?) """
         for i, (dom, quant) in enumerate(zip(fp.domains, quants)):
-            print(vid+i, dom, quant.shape)
             quants_bytes = BytesIO()
             np.save(quants_bytes, quant, allow_pickle=True)
             self.cur.execute(insert, (vid+i, dom, quants_bytes.getvalue(), fp.pid))
         self.conn.commit()  
 
 
-    def load_fprints(self) -> list:
+    def load_fprints(self, pid: str = '') -> list:
         """Loads fingerprints from database.
+
+        Args:
+            pid (str): Protein ID of sequence in database (optional)
 
         Returns:
             list: List of numpy arrays
         """
 
-        select = """ SELECT vid, fingerprint FROM fingerprints """
-        rows = self.cur.execute(select).fetchall()
-        fprints = []
-        for row in rows:
-            vid, fprint = row
-            fprint = np.load(BytesIO(fprint), allow_pickle=True)
-            fprints.append((vid, fprint))
+        if pid:  # specific sequence
+            select = """ SELECT vid, fingerprint FROM fingerprints WHERE pid = ? """
+            fps = self.cur.execute(select, (pid,)).fetchall()
+        else:  # all sequences
+            select = """ SELECT vid, fingerprint FROM fingerprints """
+            fps = self.cur.execute(select).fetchall()
 
+        # Load fingerprints
+        fprints = []
+        for fp in fps:
+            fprint = np.load(BytesIO(fp[1]), allow_pickle=True)
+            fprints.append((fp[0], fprint))
+        
         return fprints
 
 

@@ -15,21 +15,21 @@ def compare_fprints(qfp: list, dfp: list) -> tuple:
     all pairs.
 
     Args:
-        qfp (list): List of query fingerprints
-        dfp (list): List of database fingerprints
+        qfp (list): List of query fingerprints (vid, fp)
+        dfp (list): List of database fingerprints (vid, fp)
 
     Returns:
         tuple (float, tuple): max sim, (query dom index, database dom index)
     """
 
-    max_sim, doms = 0, ()
-    for i, q in enumerate(qfp):
-        for j, d in enumerate(dfp):
+    max_sim, vids = 0, ()
+    for i, q in qfp:  # i is query vid, q is query fingerprint
+        for j, d in dfp:  # j is database vid, d is database fingerprint
             sim = 1-abs(q-d).sum()/17000
             if sim > max_sim:
                 max_sim = sim
-                doms = (i, j)
-    return max_sim, doms
+                vids = (i, j)
+    return max_sim, vids
 
 
 def search_db(query_db: str, fp_db: str):
@@ -47,25 +47,23 @@ def search_db(query_db: str, fp_db: str):
     fp_db.db_info()
 
     # Load fingerprints
-    query_fps = query_db.load_fprints()
     db_fps = fp_db.load_fprints()
 
-    # Compare fingerprints
-    for query, qfp in query_fps.items():
-        max_sim, max_pid, doms = 0, '', ()
-        for db, dfp in db_fps.items():
-            sim, doms = compare_fprints(qfp, dfp)
-            if sim > max_sim:
-                max_sim, max_pid, max_doms = sim, db, doms
-        
+    # Get each sequence from query db
+    select = """ SELECT pid FROM sequences """
+    query_fps = query_db.cur.execute(select).fetchall()
+    for query in query_fps:
+        qfps = query_db.load_fprints(query[0])
+        sim, vids = compare_fprints(qfps, db_fps)
+    
         # Print matches
-        select = 'SELECT domains FROM sequences WHERE pid = ? '
-        db_doms = fp_db.cur.execute(select, (max_pid,)).fetchone()[0]
-        query_doms = query_db.cur.execute(select, (query,)).fetchone()[0]
-        db_doms, query_doms = db_doms.split(', '), query_doms.split(', ')
-        print(f'Query: {query}, {query_doms[max_doms[0]]}\n'
-              f'Match: {max_pid}, {db_doms[max_doms[1]]}\n'
-              f'Similarity: {max_sim:.2f}\n')
+        select = 'SELECT pid, domain FROM fingerprints WHERE vid = ? '
+        db_match = fp_db.cur.execute(select, (vids[1],)).fetchone()
+        query_match = query_db.cur.execute(select, (vids[0],)).fetchone()
+
+        print(f'Query: {query_match[0]}, {query_match[1]}\n'
+              f'Match: {db_match[0]}, {db_match[1]}\n'
+              f'Similarity: {sim:.2f}\n')
 
     query_db.close()
     fp_db.close()
