@@ -6,8 +6,10 @@ __date__ = "12/18/23"
 
 import argparse
 import datetime
+import faiss
 import logging
 import os
+import numpy as np
 import torch
 import torch.multiprocessing as mp
 from multiprocessing import Pool
@@ -149,6 +151,24 @@ def embed_cpu(args: argparse.Namespace, db: Database):
         fprint_cpu(cpu_queue, args, db)
 
 
+def create_index(db: Database):
+    """Creates index of fingerprints for fast querying with FAISS.
+
+    Args:
+        db (Database): Database object connected to SQLite database
+    """
+
+    # Load fingerprints as a flat numpy array
+    fps = db.load_fprints(vid=False)
+    fps = np.array(fps)
+    
+    # Create index
+    dim = fps.shape[1]  # dimension
+    index = faiss.IndexHNSWFlat(dim, 42)
+    index.add(fps)
+    faiss.write_index(index, db.path.replace('.db', '.index'))
+
+
 def main():
     """Sequences from a fasta file of protein sequences go through two processes:
 
@@ -173,6 +193,7 @@ def main():
         embed_gpu(args, db)
     else:
         embed_cpu(args, db)
+    create_index(db)
     db.close()
 
 
