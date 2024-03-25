@@ -197,28 +197,37 @@ class Database:
         self.conn.commit()  
 
 
-    def load_fprints(self, pid: str = '') -> list:
+    def load_fprints(self, vid: bool = True, pid: str = '') -> list:
         """Loads fingerprints from database.
 
         Args:
-            pid (str): Protein ID of sequence in database (optional)
+            vid (bool): True if fingerprints are being loaded for searching.
+            pid (str): Protein ID of sequence in database for querying.
 
         Returns:
             list: List of numpy arrays
         """
 
-        if pid:  # specific sequence
+        if vid and pid:  # need name of sequence when querying it against search database
             select = """ SELECT vid, fingerprint FROM fingerprints WHERE pid = ? """
             fps = self.cur.execute(select, (pid,)).fetchall()
-        else:  # all sequences
+        if vid and not pid:  # don't need seq names when database is being searched against
             select = """ SELECT vid, fingerprint FROM fingerprints """
+            fps = self.cur.execute(select).fetchall()
+        if not vid and not pid:  # don't need vector ids when making an index
+            select = """ SELECT fingerprint FROM fingerprints """
             fps = self.cur.execute(select).fetchall()
 
         # Load fingerprints
         fprints = []
-        for fp in fps:
-            fprint = np.load(BytesIO(fp[1]), allow_pickle=True)
-            fprints.append((fp[0], fprint))
+        if len(fps[0]) == 2:  # for searching
+            for fp in fps:
+                fprint = np.load(BytesIO(fp[1]), allow_pickle=True)
+                fprints.append((fp[0], fprint))
+        else:  # to make an index
+            for fp in fps:
+                fprint = np.load(BytesIO(fp[0]), allow_pickle=True)
+                fprints.append(fprint)
         
         return fprints
 

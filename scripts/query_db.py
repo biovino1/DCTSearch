@@ -45,8 +45,6 @@ def search_db(query_db: str, fp_db: str):
     query_db.db_info()
     fp_db = Database(fp_db)
     fp_db.db_info()
-
-    # Load fingerprints
     db_fps = fp_db.load_fprints()
 
     # Get each sequence from query db
@@ -60,7 +58,6 @@ def search_db(query_db: str, fp_db: str):
         select = 'SELECT pid, domain FROM fingerprints WHERE vid = ? '
         db_match = fp_db.cur.execute(select, (vids[1],)).fetchone()
         query_match = query_db.cur.execute(select, (vids[0],)).fetchone()
-
         print(f'Query: {query_match[0]}, {query_match[1]}\n'
               f'Match: {db_match[0]}, {db_match[1]}\n'
               f'Similarity: {sim:.2f}\n')
