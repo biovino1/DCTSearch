@@ -164,11 +164,13 @@ class Database:
                 print('No sequences to fingerprint!')
 
 
-    def add_fprint(self, fp: Fingerprint):
+    def add_fprint(self, fp: Fingerprint, lock, counter):
         """Adds domains and fingerprints to database.
 
         Args:
             fp (Fingerprint): Fingerprint object to add to database.
+            lock (multiprocessing.Lock): Lock for multiprocessing.
+            counter (multiprocessing.Value): Value object for unique fingerprint ID's (vid)
         """
 
         # Convert quantizations to bytes for db storage
@@ -180,20 +182,15 @@ class Database:
         update = """ UPDATE sequences SET fpcount = ? WHERE pid = ? """
         self.cur.execute(update, (len(fp.domains), fp.pid))
 
-        # Get id of last fingerprint in database
-        select = "SELECT vid FROM fingerprints ORDER BY vid DESC LIMIT 1"
-        try:
-            vid = self.cur.execute(select).fetchone()[0] + 1
-        except TypeError:
-            vid = 1
-
         # Add each domain and it's fingerprint to the fingerprints table
         insert = """ INSERT INTO fingerprints(vid, domain, fingerprint, pid)
             VALUES(?, ?, ?, ?) """
         for dom, quant in zip(fp.domains, quants):
             quants_bytes = BytesIO()
             np.save(quants_bytes, quant, allow_pickle=True)
-            self.cur.execute(insert, (vid, dom, quants_bytes.getvalue(), fp.pid))
+            with lock:
+                counter.value += 1  # ensure unique vid
+                self.cur.execute(insert, (counter.value, dom, quants_bytes.getvalue(), fp.pid))
         self.conn.commit()  
 
 

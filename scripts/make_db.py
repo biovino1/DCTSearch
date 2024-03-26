@@ -12,7 +12,7 @@ import os
 import numpy as np
 import torch
 import torch.multiprocessing as mp
-from multiprocessing import Pool
+from multiprocessing import Pool, Lock, Value
 from embedding import Model, Batch
 from fingerprint import Fingerprint
 from database import Database
@@ -36,7 +36,7 @@ def queue_cpu(fp: Fingerprint, args: argparse.Namespace) -> Fingerprint:
     return fp
 
 
-def fprint_cpu(batch: list, args: argparse.Namespace, db: Database):
+def fprint_cpu(batch: list, args: argparse.Namespace, db: Database, lock: mp.Lock, counter: mp.Value):
     """Puts batches of Fingerprints in queue to be quantized on cpu(s). Returns a list of
     Fingerprint objects with quantized domains.
 
@@ -44,21 +44,26 @@ def fprint_cpu(batch: list, args: argparse.Namespace, db: Database):
         batch (list): List of fingerprints to quantize
         args (argparse.Namespace): Command line arguments
         db (Database): Database object connected to SQLite database
+        lock (Lock): Lock object for Value counter
+        counter (Value): Value object for counting fingerprints
     """
 
     with Pool(processes=args.cpu) as pool:
         results = pool.starmap(queue_cpu, [(fp, args) for fp in batch])
     for fp in results:
-        db.add_fprint(fp)
+        db.add_fprint(fp, lock, counter)
 
 
-def queue_gpu(rank: int, queue: mp.Queue, args: argparse.Namespace, db: Database):
+def queue_gpu(rank: int, queue: mp.Queue, args: argparse.Namespace, db: Database, lock: mp.Lock, counter: mp.Value):
     """Moves through queue of sequences to fingerprint and add to database.
 
-    :param rank: GPU to load model on
-    :param queue: queue of families to embed and transform
-    :param args: explained in main()
-    :param db: Database object connected to SQLite database
+    Args:
+        rank (int): GPU to load model on
+        queue (mp.Queue): queue of batches to embed and transform
+        args (argparse.Namespace): explained in main()
+        db (Database): Database object connected to SQLite database
+        lock (mp.Lock): Lock object for Value counter
+        counter (mp.Value): Value object for counting fingerprints
     """
 
     # Load tokenizer and encoder
@@ -82,27 +87,28 @@ def queue_gpu(rank: int, queue: mp.Queue, args: argparse.Namespace, db: Database
 
         # If queue is full, start multiprocess fingerprinting
         if len(cpu_queue) >= args.cpu/args.gpu:
-            fprint_cpu(cpu_queue, args, db)
+            fprint_cpu(cpu_queue, args, db, lock, counter)
             cpu_queue = []
 
     # Last batch if queue is not full
     if cpu_queue:
-        fprint_cpu(cpu_queue, args, db)
-    db.close()
+        fprint_cpu(cpu_queue, args, db, lock, counter)
 
 
-def embed_gpu(args: argparse.Namespace, db: Database):
+def embed_gpu(args: argparse.Namespace, db: Database, lock: mp.Lock, counter: mp.Value):
     """Puts batches of sequences in queue to be embedded on gpu(s).
 
     Args:
         args (argparse.Namespace): Command line arguments
         db (Database): Database object connected to SQLite database
+        lock (Lock): Lock object for Value counter
+        counter (Value): Value object for counting fingerprints
     """
 
     mp_queue = mp.Queue()
     processes = []
     for rank in range(args.gpu):
-        proc = mp.Process(target=queue_gpu, args=(rank, mp_queue, args, db))
+        proc = mp.Process(target=queue_gpu, args=(rank, mp_queue, args, db, lock, counter))
         proc.start()
         processes.append(proc)
     for seqs in db.yield_seqs(args.maxlen, args.cpu):
@@ -113,12 +119,14 @@ def embed_gpu(args: argparse.Namespace, db: Database):
         proc.join()
 
 
-def embed_cpu(args: argparse.Namespace, db: Database):
+def embed_cpu(args: argparse.Namespace, db: Database, lock: mp.Lock, counter: mp.Value):
     """Embeds sequences on cpu.
     
     Args:
         args (argparse.Namespace): Command line arguments
         db (Database): Database object connected to SQLite database
+        lock (Lock): Lock object for Value counter
+        counter (Value): Value object for counting fingerprints
     """
 
     model = Model('esm2', 't30')
@@ -138,12 +146,12 @@ def embed_cpu(args: argparse.Namespace, db: Database):
 
         # If queue is full, start multiprocess fingerprinting
         if len(cpu_queue) >= args.cpu:
-            fprint_cpu(cpu_queue, args, db)
+            fprint_cpu(cpu_queue, args, db, lock, counter)
             cpu_queue = []
 
     # Last batch if queue is not full
     if cpu_queue:
-        fprint_cpu(cpu_queue, args, db)
+        fprint_cpu(cpu_queue, args, db, lock, counter)
 
 
 def create_index(db: Database):
@@ -187,13 +195,21 @@ def main():
     os.makedirs(os.path.dirname(log_filename), exist_ok=True)
     logging.basicConfig(filename=log_filename, filemode='a',
                      level=logging.INFO, format='%(message)s')
+    
+    # Query db to get last vid
+    db = Database(args.dbfile, args.fafile)
+    select = "SELECT vid FROM fingerprints ORDER BY vid DESC LIMIT 1"
+    try:
+        vid = db.cur.execute(select).fetchone()[0] + 1
+    except TypeError:
+        vid = 0
+    lock, counter = Lock(), Value('i', vid)
 
     # Fingerprint sequences
-    db = Database(args.dbfile, args.fafile)
     if args.gpu:
-        embed_gpu(args, db)
+        embed_gpu(args, db, lock, counter)
     else:
-        embed_cpu(args, db)
+        embed_cpu(args, db, lock, counter)
 
     # Create index and cache db info
     create_index(db)
