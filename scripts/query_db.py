@@ -5,31 +5,61 @@ __date__ = "3/19/23"
 """
 
 import argparse
+from datetime import datetime
+import logging
 import os
 from database import Database
 from make_db import embed_cpu, embed_gpu
 
+log_filename = 'data/logs/query_db.log'  #pylint: disable=C0103
+os.makedirs(os.path.dirname(log_filename), exist_ok=True)
+logging.basicConfig(filename=log_filename, filemode='w',
+                     level=logging.INFO, format='%(message)s')
 
-def compare_fprints(qfp: list, dfp: list) -> tuple:
-    """Compares two sets of fingerprints and returns the highest similarity score between
-    all pairs.
+
+def compare_fprints(qfp: list, dfp: list) -> list:
+    """Compares two sets of fingerprints and returns dictionary of highest similarity scores.
 
     Args:
         qfp (list): List of query fingerprints (vid, fp)
         dfp (list): List of database fingerprints (vid, fp)
 
     Returns:
-        tuple (float, tuple): max sim, (query dom index, database dom index)
+        list: List of tuples ((query vid, database vid) similarity) sorted by similarity
     """
 
-    max_sim, vids = 0, ()
+    sims = {}
     for i, q in qfp:  # i is query vid, q is query fingerprint
         for j, d in dfp:  # j is database vid, d is database fingerprint
             sim = 1-abs(q-d).sum()/17000
-            if sim > max_sim:
-                max_sim = sim
-                vids = (i, j)
-    return max_sim, vids
+
+            # If similarity is higher than top 100, add to dictionary
+            if len(sims) < 100:
+                sims[(i, j)] = sim
+            else:
+                if sim > min(sims.values()):
+                    del sims[min(sims, key=sims.get)]
+                    sims[(i, j)] = round(sim, 3)
+
+    sims = sorted(sims.items(), key=lambda x: x[1], reverse=True)
+    return sims
+
+
+def write_sims(sims: list, query_db: Database, fp_db: Database):
+    """Prints the most similar protein to a query sequence.
+
+    Args:
+        sims (list): List of tuples ((query vid, database vid) similarity) sorted by similarity
+        query_db (Database): Database object connected to query database
+        fp_db (Database): Database object connected to SQLite database
+    """
+
+    for i, j in sims:
+        select = 'SELECT pid, domain FROM fingerprints WHERE vid = ? '
+        db_match = fp_db.cur.execute(select, (i[1],)).fetchone()
+        query_match = query_db.cur.execute(select, (i[0],)).fetchone()
+        logging.info('%s, %s %s, %s %s, %.2f',
+                     datetime.now(), query_match[0], query_match[1], db_match[0], db_match[1], j)
 
 
 def search_db(query_db: str, fp_db: str):
@@ -47,20 +77,13 @@ def search_db(query_db: str, fp_db: str):
     fp_db.db_info()
     db_fps = fp_db.load_fprints()
 
-    # Get each sequence from query db
+    # Get each sequence from query db and compare to db
     select = """ SELECT pid FROM sequences """
     query_fps = query_db.cur.execute(select).fetchall()
     for query in query_fps:
         qfps = query_db.load_fprints(query[0])
-        sim, vids = compare_fprints(qfps, db_fps)
-    
-        # Print matches
-        select = 'SELECT pid, domain FROM fingerprints WHERE vid = ? '
-        db_match = fp_db.cur.execute(select, (vids[1],)).fetchone()
-        query_match = query_db.cur.execute(select, (vids[0],)).fetchone()
-        print(f'Query: {query_match[0]}, {query_match[1]}\n'
-              f'Match: {db_match[0]}, {db_match[1]}\n'
-              f'Similarity: {sim:.2f}\n')
+        sims = compare_fprints(qfps, db_fps)
+        write_sims(sims, query_db, fp_db)
 
     query_db.close()
     fp_db.close()

@@ -17,11 +17,6 @@ from embedding import Model, Batch
 from fingerprint import Fingerprint
 from database import Database
 
-log_filename = 'data/logs/make_db.log'  #pylint: disable=C0103
-os.makedirs(os.path.dirname(log_filename), exist_ok=True)
-logging.basicConfig(filename=log_filename, filemode='a',
-                     level=logging.INFO, format='%(message)s')
-
 
 def queue_cpu(fp: Fingerprint, args: argparse.Namespace) -> Fingerprint:
     """Predicts domains and quantizes embeddings on cpu. Returns Fingerprint.
@@ -188,12 +183,21 @@ def main():
     parser.add_argument('--gpu', type=int, required=False, help='number of gpus to use')
     args = parser.parse_args()
 
+    log_filename = f'data/logs/{args.dbfile}.log'  #pylint: disable=C0103
+    os.makedirs(os.path.dirname(log_filename), exist_ok=True)
+    logging.basicConfig(filename=log_filename, filemode='a',
+                     level=logging.INFO, format='%(message)s')
+
+    # Fingerprint sequences
     db = Database(args.dbfile, args.fafile)
     if args.gpu:
         embed_gpu(args, db)
     else:
         embed_cpu(args, db)
+
+    # Create index and cache db info
     create_index(db)
+    db.db_info()
     db.close()
 
 

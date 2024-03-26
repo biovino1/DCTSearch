@@ -190,10 +190,10 @@ class Database:
         # Add each domain and it's fingerprint to the fingerprints table
         insert = """ INSERT INTO fingerprints(vid, domain, fingerprint, pid)
             VALUES(?, ?, ?, ?) """
-        for i, (dom, quant) in enumerate(zip(fp.domains, quants)):
+        for dom, quant in zip(fp.domains, quants):
             quants_bytes = BytesIO()
             np.save(quants_bytes, quant, allow_pickle=True)
-            self.cur.execute(insert, (vid+i, dom, quants_bytes.getvalue(), fp.pid))
+            self.cur.execute(insert, (vid, dom, quants_bytes.getvalue(), fp.pid))
         self.conn.commit()  
 
 
