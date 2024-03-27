@@ -8,6 +8,7 @@ import argparse
 from datetime import datetime
 import logging
 import os
+import multiprocessing as mp
 from database import Database
 from make_db import embed_cpu, embed_gpu
 
@@ -105,10 +106,12 @@ def main():
     # Embed query sequences
     query_db = os.path.splitext(args.query)[0]
     db = Database(query_db, args.query)
+    vid = db.get_last_vid()
+    lock, counter = mp.Lock(), mp.Value('i', vid)
     if args.gpu:
-        embed_gpu(args, db)
+        embed_gpu(args, db, lock, counter)
     else:
-        embed_cpu(args, db)
+        embed_cpu(args, db, lock, counter)
 
     # Query database for most similar sequence
     search_db(query_db, args.dbfile)

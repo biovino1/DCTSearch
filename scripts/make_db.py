@@ -163,7 +163,7 @@ def create_index(db: Database):
 
     # Load fingerprints as a flat numpy array
     fps = db.load_fprints(vid=False)
-    fps = np.array(fps)
+    fps = np.array(fps, dtype=np.int8)
     
     # Create index
     dim = fps.shape[1]  # dimension
@@ -196,13 +196,9 @@ def main():
     logging.basicConfig(filename=log_filename, filemode='a',
                      level=logging.INFO, format='%(message)s')
     
-    # Query db to get last vid
+    # Get last vid and create lock and counter
     db = Database(args.dbfile, args.fafile)
-    select = "SELECT vid FROM fingerprints ORDER BY vid DESC LIMIT 1"
-    try:
-        vid = db.cur.execute(select).fetchone()[0] + 1
-    except TypeError:
-        vid = 0
+    vid = db.get_last_vid()
     lock, counter = Lock(), Value('i', vid)
 
     # Fingerprint sequences

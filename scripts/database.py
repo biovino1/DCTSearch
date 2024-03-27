@@ -163,6 +163,22 @@ class Database:
             else:
                 print('No sequences to fingerprint!')
 
+    
+    def get_last_vid(self) -> int:
+        """Returns the last fingerprint ID in the database.
+
+        Returns:
+            int: Last fingerprint ID.
+        """
+
+        select = """ SELECT vid FROM fingerprints ORDER BY vid DESC LIMIT 1 """
+        try:
+            vid = self.cur.execute(select).fetchone()[0] + 1
+        except TypeError:
+            vid = 1
+
+        return vid
+
 
     def add_fprint(self, fp: Fingerprint, lock, counter):
         """Adds domains and fingerprints to database.
@@ -207,23 +223,22 @@ class Database:
 
         if vid and pid:  # need name of sequence when querying it against search database
             select = """ SELECT vid, fingerprint FROM fingerprints WHERE pid = ? """
-            fps = self.cur.execute(select, (pid,)).fetchall()
+            self.cur.execute(select, (pid,))
         if vid and not pid:  # don't need seq names when database is being searched against
             select = """ SELECT vid, fingerprint FROM fingerprints """
-            fps = self.cur.execute(select).fetchall()
+            self.cur.execute(select)
         if not vid and not pid:  # don't need vector ids when making an index
             select = """ SELECT fingerprint FROM fingerprints """
-            fps = self.cur.execute(select).fetchall()
+            self.cur.execute(select)
 
-        # Load fingerprints
+        # Load fingerprints one at a time to save memory
         fprints = []
-        if len(fps[0]) == 2:  # for searching
-            for fp in fps:
-                fprint = np.load(BytesIO(fp[1]), allow_pickle=True)
-                fprints.append((fp[0], fprint))
-        else:  # to make an index
-            for fp in fps:
-                fprint = np.load(BytesIO(fp[0]), allow_pickle=True)
+        for row in self.cur:
+            if vid: # row[0] is vid, row[1] is fingerprint
+                fprint = np.load(BytesIO(row[1]), allow_pickle=True)
+                fprints.append((row[0], fprint))
+            else:  # row[0] is fingerprint
+                fprint = np.load(BytesIO(row[0]), allow_pickle=True)
                 fprints.append(fprint)
         
         return fprints
