@@ -190,7 +190,7 @@ class Database:
         """
 
         # Convert quantizations to bytes for db storage
-        quants = np.array([fp.quants[dom] for dom in fp.domains])
+        quants = np.array([fp.quants[dom] for dom in fp.domains])#, dtype=np.uint8)
         quants_bytes = BytesIO()
         np.save(quants_bytes, quants, allow_pickle=True)
 
@@ -239,6 +239,7 @@ class Database:
                 fprints.append((row[0], fprint))
             else:  # row[0] is fingerprint
                 fprint = np.load(BytesIO(row[0]), allow_pickle=True)
+                print(fprint.dtype)
                 fprints.append(fprint)
         
         return fprints

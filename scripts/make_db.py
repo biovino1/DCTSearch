@@ -163,7 +163,7 @@ def create_index(db: Database):
 
     # Load fingerprints as a flat numpy array
     fps = db.load_fprints(vid=False)
-    fps = np.array(fps, dtype=np.int8)
+    fps = np.array(fps, dtype=np.uint8)
     
     # Create index
     dim = fps.shape[1]  # dimension
@@ -191,8 +191,9 @@ def main():
     parser.add_argument('--gpu', type=int, required=False, help='number of gpus to use')
     args = parser.parse_args()
 
-    log_filename = f'data/logs/{args.dbfile}.log'  #pylint: disable=C0103
-    os.makedirs(os.path.dirname(log_filename), exist_ok=True)
+    log_filename = f'{args.dbfile}.log'  #pylint: disable=C0103
+    if os.path.dirname(log_filename):
+        os.makedirs(os.path.dirname(log_filename), exist_ok=True)
     logging.basicConfig(filename=log_filename, filemode='a',
                      level=logging.INFO, format='%(message)s')
     
