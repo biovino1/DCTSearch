@@ -20,10 +20,43 @@ logging.basicConfig(filename=log_filename, filemode='w',
                      level=logging.INFO, format='%(message)s')
 
 
-def search_db(query_db: str, fp_db: str):
+def get_top_hits(dm: np.ndarray, im: np.ndarray, top: int, fp_db: Database, query: str) -> list:
+    """Returns a list of protein ID, domain, and distance for the top hits. Searches distance
+    matrix for lowest values, and with corresponding values in index matrix, queries database
+    for corresponding protein ID and domain.
+
+    Args:
+        D (np.ndarray): Distance matrix
+        I (np.ndarray): Index matrix
+        top (int): Number of top hits to return
+        fp_db (Database): Database object for fingerprint database
+        query (str): Query protein ID
+
+    Returns:
+        list: List of protein ID's and distance for top hits
+    """
+
+    # Store all hits and sort by distance
+    top_hits = {}
+    for i, khits in enumerate(dm):
+        for j, dist in enumerate(khits):
+            top_hits[i, j] = dist
+    top_hits = dict(sorted(top_hits.items(), key=lambda x: x[1]))
+
+    # Get protein ID and domain for each hit
+    for index in list(top_hits.keys())[:top]:
+        vid = int(im[index[0], index[1]])
+        select = """ SELECT pid, domain FROM fingerprints WHERE vid = ? """
+        pid, domain = fp_db.cur.execute(select, (vid,)).fetchone()
+        logging.info('%s: %s, %s-%s, %s', datetime.now(), query, pid, domain, top_hits[index])
+
+
+
+def search_db(args: argparse.Namespace, query_db: str, fp_db: str):
     """Searches a database of DCT fingerprints for the most similar protein to each query sequence.
 
     Args:
+        args (argparse.Namespace): Command line arguments
         query_db (str): Name of query database
         fp_db (str): Name of fingerprint database
     """
@@ -33,7 +66,6 @@ def search_db(query_db: str, fp_db: str):
     query_db.db_info()
     index = faiss.read_index(fp_db.replace('.db', '.index'))
     fp_db = Database(fp_db)
-    fp_db.db_info()
 
     # Get each sequence from query db and compare to db
     select = """ SELECT pid FROM sequences """
@@ -41,14 +73,8 @@ def search_db(query_db: str, fp_db: str):
     for query in query_fps:
         qfps = query_db.load_fprints(pid=query[0])
         que = np.array([fp[1] for fp in qfps], dtype=np.uint8)
-        D, I = index.search(que, 100)
-    
-        # For each result, get vid from fingerprints db
-        for i in range(100):
-            ind = int(I[0][i])
-            select = 'SELECT pid, domain FROM fingerprints WHERE vid = ?'
-            db_match = fp_db.cur.execute(select, (ind,)).fetchone()
-            logging.info('%s, %s, %s, %s', datetime.now(), query[0], db_match, D[0][i]) 
+        dm, im = index.search(que, args.khits)  # distance, index matrices
+        get_top_hits(dm, im, args.khits, fp_db, query[0])
 
     query_db.close()
     fp_db.close()
@@ -63,6 +89,7 @@ def main():
     parser.add_argument('--query', type=str, required=True, help='can be .fa or .db file')
     parser.add_argument('--dbfile', type=str, required=True, help='fingerprint database (.db)')
     parser.add_argument('--maxlen', type=int, default=1000, help='max sequence length to embed')
+    parser.add_argument('--khits', type=int, default=100, help='number of hits to return')
     parser.add_argument('--cpu', type=int, default=1, help='number of cpus to use')
     parser.add_argument('--gpu', type=int, default=False, help='number of gpus to use')
     args = parser.parse_args()
@@ -79,7 +106,7 @@ def main():
 
     # Query database for most similar sequence
     os.environ['OMP_NUM_THREADS'] = str(args.cpu)
-    search_db(query_db, args.dbfile)
+    search_db(args, query_db, args.dbfile)
    
 
 if __name__ == '__main__':
