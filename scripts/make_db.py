@@ -203,12 +203,15 @@ def main():
     lock, counter = Lock(), Value('i', vid)
 
     # Fingerprint sequences
+    print('Fingerprinting sequences...')
     if args.gpu:
         embed_gpu(args, db, lock, counter)
     else:
         embed_cpu(args, db, lock, counter)
+    db.rename_vid()
 
     # Create index and cache db info
+    print('Creating index...')
     create_index(db)
     db.db_info()
     db.close()

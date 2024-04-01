@@ -190,7 +190,7 @@ class Database:
         """
 
         # Convert quantizations to bytes for db storage
-        quants = np.array([fp.quants[dom] for dom in fp.domains])#, dtype=np.uint8)
+        quants = np.array([fp.quants[dom] for dom in fp.domains], dtype=np.uint8)
         quants_bytes = BytesIO()
         np.save(quants_bytes, quants, allow_pickle=True)
 
@@ -239,10 +239,26 @@ class Database:
                 fprints.append((row[0], fprint))
             else:  # row[0] is fingerprint
                 fprint = np.load(BytesIO(row[0]), allow_pickle=True)
-                print(fprint.dtype)
                 fprints.append(fprint)
         
         return fprints
+    
+
+    def rename_vid(self):
+        """Renames fingerprint ID column in database to be sequential. This is necessary for the
+        FAISS index to work properly. ID's can be incorrect if multiprocessing is used to add
+        fingerprints to the database.
+        """
+
+        # Get all fingerprints
+        select = """ SELECT vid FROM fingerprints """
+        vids = self.cur.execute(select).fetchall()
+
+        # Rename fingerprints
+        update = """ UPDATE fingerprints SET vid = ? WHERE vid = ? """
+        for i, vid in enumerate(vids):
+            self.cur.execute(update, (i+1, vid[0]))
+        self.conn.commit()
 
 
     def db_info(self):

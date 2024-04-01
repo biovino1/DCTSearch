@@ -51,7 +51,6 @@ def get_top_hits(dm: np.ndarray, im: np.ndarray, top: int, fp_db: Database, quer
         logging.info('%s: %s, %s-%s, %s', datetime.now(), query, pid, domain, top_hits[index])
 
 
-
 def search_db(args: argparse.Namespace, query_db: str, fp_db: str):
     """Searches a database of DCT fingerprints for the most similar protein to each query sequence.
 
