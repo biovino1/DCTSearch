@@ -5,7 +5,6 @@ __date__ = "3/19/23"
 """
 
 import argparse
-from datetime import datetime
 import faiss
 import logging
 import os
@@ -13,11 +12,6 @@ import multiprocessing as mp
 import numpy as np
 from database import Database
 from make_db import embed_cpu, embed_gpu
-
-log_filename = 'data/logs/query_db.log'  #pylint: disable=C0103
-os.makedirs(os.path.dirname(log_filename), exist_ok=True)
-logging.basicConfig(filename=log_filename, filemode='w',
-                     level=logging.INFO, format='%(message)s')
 
 
 def get_top_hits(dm: np.ndarray, im: np.ndarray, top: int, fp_db: Database, query: str) -> list:
@@ -44,11 +38,15 @@ def get_top_hits(dm: np.ndarray, im: np.ndarray, top: int, fp_db: Database, quer
     top_hits = dict(sorted(top_hits.items(), key=lambda x: x[1]))
 
     # Get protein ID and domain for each hit
-    for index in list(top_hits.keys())[:top]:
+    for i, index in enumerate(list(top_hits.keys())[:top]):
         vid = int(im[index[0], index[1]])
+        if vid == -1:  # No more hits
+            break
         select = """ SELECT pid, domain FROM fingerprints WHERE vid = ? """
-        pid, domain = fp_db.cur.execute(select, (vid,)).fetchone()
-        logging.info('%s: %s, %s-%s, %s', datetime.now(), query, pid, domain, top_hits[index])
+        pid, domain = fp_db.cur.execute(select, (vid+1,)).fetchone()  # vid is 0-indexed
+        logging.info('Query: %s, Result %s: %s-%s, Distance: %s',
+                      f'{query}-{index[0]}', i, pid, domain, top_hits[index])
+    print()
 
 
 def search_db(args: argparse.Namespace, query_db: str, fp_db: str):
@@ -69,9 +67,10 @@ def search_db(args: argparse.Namespace, query_db: str, fp_db: str):
     # Get each sequence from query db and compare to db
     select = """ SELECT pid FROM sequences """
     query_fps = query_db.cur.execute(select).fetchall()
+    print('Querying database...\n')
     for query in query_fps:
         qfps = query_db.load_fprints(pid=query[0])
-        que = np.array([fp[1] for fp in qfps], dtype=np.uint8)
+        que = np.array([fp[1] for fp in qfps])
         dm, im = index.search(que, args.khits)  # distance, index matrices
         get_top_hits(dm, im, args.khits, fp_db, query[0])
 
@@ -86,12 +85,18 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--query', type=str, required=True, help='can be .fa or .db file')
-    parser.add_argument('--dbfile', type=str, required=True, help='fingerprint database (.db)')
+    parser.add_argument('--db', type=str, required=True, help='fingerprint database (.db)')
+    parser.add_argument('--out', type=str, help='output file')
     parser.add_argument('--maxlen', type=int, default=1000, help='max sequence length to embed')
     parser.add_argument('--khits', type=int, default=100, help='number of hits to return')
     parser.add_argument('--cpu', type=int, default=1, help='number of cpus to use')
     parser.add_argument('--gpu', type=int, default=False, help='number of gpus to use')
     args = parser.parse_args()
+
+    # Logging for either stdout or file
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    if args.out:
+        logging.basicConfig(filename=args.out, filemode='w')
 
     # Embed query sequences
     query_db = os.path.splitext(args.query)[0]
@@ -105,7 +110,7 @@ def main():
 
     # Query database for most similar sequence
     os.environ['OMP_NUM_THREADS'] = str(args.cpu)
-    search_db(args, query_db, args.dbfile)
+    search_db(args, query_db, args.db)
    
 
 if __name__ == '__main__':
