@@ -86,7 +86,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--query', type=str, required=True, help='can be .fa or .db file')
     parser.add_argument('--db', type=str, required=True, help='fingerprint database (.db)')
-    parser.add_argument('--out', type=str, help='output file')
+    parser.add_argument('--out', type=str, default=False, help='output file')
     parser.add_argument('--maxlen', type=int, default=1000, help='max sequence length to embed')
     parser.add_argument('--khits', type=int, default=100, help='number of hits to return')
     parser.add_argument('--cpu', type=int, default=1, help='number of cpus to use')

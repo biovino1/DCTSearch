@@ -18,12 +18,11 @@ from fingerprint import Fingerprint
 from database import Database
 
 
-def queue_cpu(fp: Fingerprint, args: argparse.Namespace) -> Fingerprint:
+def queue_cpu(fp: Fingerprint) -> Fingerprint:
     """Predicts domains and quantizes embeddings on cpu. Returns Fingerprint.
 
     Args:
         queue (mp.Queue): Queue of embeddings to fingerprint
-        args (argparse.Namespace): Command line arguments
 
     Returns:
         Fingerprint: Fingerprint object with quantized domains.
@@ -49,7 +48,7 @@ def fprint_cpu(batch: list, args: argparse.Namespace, db: Database, lock: mp.Loc
     """
 
     with Pool(processes=args.cpu) as pool:
-        results = pool.starmap(queue_cpu, [(fp, args) for fp in batch])
+        results = pool.starmap(queue_cpu, [(fp,) for fp in batch])
     for fp in results:
         db.add_fprint(fp, lock, counter)
 
@@ -161,6 +160,11 @@ def create_index(db: Database):
         db (Database): Database object connected to SQLite database
     """
 
+    # Check if index already exists
+    if os.path.exists(f'{db.path}.index'):
+        print(f'Index {db.path}.index already exists.\n')
+        return
+
     # Load fingerprints as a flat numpy array
     fps = db.load_fprints(vid=False)
     fps = np.array(fps, dtype=np.uint8)
@@ -169,7 +173,7 @@ def create_index(db: Database):
     dim = fps.shape[1]  # dimension
     index = faiss.IndexHNSWFlat(dim, 42)
     index.add(fps)
-    faiss.write_index(index, db.path.replace('.db', '.index'))
+    faiss.write_index(index, f'{db.path}.index')  # db.path is path w/o extension
 
 
 def main():
@@ -186,16 +190,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--fafile', type=str, required=True, help='fasta file to embed')
     parser.add_argument('--dbfile', type=str, required=True, help='db file to write to')
+    parser.add_argument('--out', type=str, default=False, help='output file')
     parser.add_argument('--maxlen', type=int, default=1000, help='max sequence length to embed')
     parser.add_argument('--cpu', type=int, default=1, help='number of cpus to use')
     parser.add_argument('--gpu', type=int, required=False, help='number of gpus to use')
     args = parser.parse_args()
 
-    log_filename = f'{args.dbfile}.log'  #pylint: disable=C0103
-    if os.path.dirname(log_filename):
-        os.makedirs(os.path.dirname(log_filename), exist_ok=True)
-    logging.basicConfig(filename=log_filename, filemode='a',
-                     level=logging.INFO, format='%(message)s')
+    # Logging for either stdout or file
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    if args.out:
+        logging.basicConfig(filename=args.out, filemode='w')
     
     # Get last vid and create lock and counter
     db = Database(args.dbfile, args.fafile)
@@ -203,7 +207,7 @@ def main():
     lock, counter = Lock(), Value('i', vid)
 
     # Fingerprint sequences
-    print('Fingerprinting sequences...')
+    print('Fingerprinting sequences...\n')
     if args.gpu:
         embed_gpu(args, db, lock, counter)
     else:
@@ -211,7 +215,8 @@ def main():
     db.rename_vid()
 
     # Create index and cache db info
-    print('Creating index...')
+    os.environ['OMP_NUM_THREADS'] = str(args.cpu)
+    print('\nCreating index...')
     create_index(db)
     db.db_info()
     db.close()
