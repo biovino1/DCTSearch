@@ -9,12 +9,13 @@ To install this respository:
 
 ```
 git clone https://github.com/biovino1/DCTSearch
+cd DCTSearch
 ```
 
-With python<=3.9 installed, you can install all required packages with pip:
+With conda installed, you can create a new environment with the required dependencies with the following commands:
 
 ```
-pip install -r req.txt
+conda env create -f env.yml
 ```
 
 ## Creating a DCT Fingerprint Database
@@ -54,9 +55,9 @@ python scripts/make_db.py --fafile <.fa file> --dbfile <output> --gpu 1 --cpu 12
 You can query a DCT fingerprint database with a fasta file containing one or more protein sequences with the following command:
 
 ```
-python scripts/query_db.py --fafile <.fa file> --dbfile <.db file>
+python scripts/query_db.py --query <.fa file> --db <.db file>
 ```
 
-Again, you can change the '--maxlen' and '--gpu' parameters as described above.
+Again, you can change the '--maxlen', '--cpu', and '--gpu' parameters to suit your system's hardware.
 
-As of right now, the query script will return the top hit from the database for each query sequence, along with the regions of the query and database sequence that were most similar and their similarity score. More functionality will be added in the future.
+There is also a '--khits' parameter that will return the top k hits from the database for each query sequence, or as many hits as are available if there are fewer than k hits. Along with the hit, with the regions of the query and database sequence that were most similar and their similarity score will also be shown. More functionality will be added in the future.
