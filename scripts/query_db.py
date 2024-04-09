@@ -1,4 +1,4 @@
-"""Queries a database of DCT fingerprints for most similar protein to each query sequence.
+"""Queries a database of DCT fingerprints for most similar fingerprints to each query sequence.
 
 __author__ = "Ben Iovino"
 __date__ = "3/19/23"
@@ -14,38 +14,41 @@ from database import Database
 from make_db import embed_cpu, embed_gpu
 
 
-def get_top_hits(dm: np.ndarray, im: np.ndarray, top: int, fp_db: Database, query: str) -> list:
-    """Returns a list of protein ID, domain, and distance for the top hits. Searches distance
-    matrix for lowest values, and with corresponding values in index matrix, queries database
-    for corresponding protein ID and domain.
+def get_top_hits(dm: np.ndarray, im: np.ndarray, top: int, fp_db: Database, query_db: Database):
+    """Logs the top hits for each query sequence. Distance and index matrices are of dimensions
+    (number of query fingerprints x khits). Indices correspond to vector ID's (vid) in the
+    fingerprint databases.
 
     Args:
-        D (np.ndarray): Distance matrix
-        I (np.ndarray): Index matrix
+        dm (np.ndarray): Distance matrix
+        im (np.ndarray): Index matrix
         top (int): Number of top hits to return
         fp_db (Database): Database object for fingerprint database
-        query (str): Query protein ID
-
-    Returns:
-        list: List of protein ID's and distance for top hits
+        query_db (Database): Database object for query database
     """
 
-    # Store all hits and sort by distance
+    # Store all hits in a dict and sort by distance
     top_hits = {}
     for i, khits in enumerate(dm):
         for j, dist in enumerate(khits):
             top_hits[i, j] = dist
     top_hits = dict(sorted(top_hits.items(), key=lambda x: x[1]))
 
-    # Get protein ID and domain for each hit
+    # Get protein ID and domain for each hit (query and db)
     for i, index in enumerate(list(top_hits.keys())[:top]):
-        vid = int(im[index[0], index[1]])
-        if vid == -1:  # No more hits
+
+        # Database and query vector ID's (0-indexed in faiss, 1-indexed in SQLite db)
+        db_vid = int(im[index[0], index[1]])
+        if db_vid == -1:  # No more hits
             break
+        q_vid = int(index[0])
+
+        # Log results
         select = """ SELECT pid, domain FROM fingerprints WHERE vid = ? """
-        pid, domain = fp_db.cur.execute(select, (vid+1,)).fetchone()  # vid is 0-indexed
-        logging.info('Query: %s, Result %s: %s-%s, Distance: %s',
-                      f'{query}-{index[0]}', i, pid, domain, top_hits[index])
+        db_pid, db_domain = fp_db.cur.execute(select, (db_vid+1,)).fetchone()
+        q_pid, q_domain = query_db.cur.execute(select, (q_vid+1,)).fetchone()
+        logging.info('Query: %s %s, Result %s: %s %s, Distance: %s',
+                      q_pid, q_domain, i+1, db_pid, db_domain, top_hits[index])
     print()
 
 
@@ -72,14 +75,14 @@ def search_db(args: argparse.Namespace, query_db: str, fp_db: str):
         qfps = query_db.load_fprints(pid=query[0])
         que = np.array([fp[1] for fp in qfps])
         dm, im = index.search(que, args.khits)  # distance, index matrices
-        get_top_hits(dm, im, args.khits, fp_db, query[0])
+        get_top_hits(dm, im, args.khits, fp_db, query_db)
 
     query_db.close()
     fp_db.close()
 
 
 def main():
-    """Processes sequences same as make_db.py and queries --dbfile for most similar sequence for
+    """Processes sequences same as make_db.py and queries --db for top --khits fingerprints for
     each sequence in the query database.
     """
 

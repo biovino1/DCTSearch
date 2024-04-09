@@ -116,6 +116,7 @@ def embed_gpu(args: argparse.Namespace, db: Database, lock: mp.Lock, counter: mp
         mp_queue.put(None)
     for proc in processes:
         proc.join()
+    db.rename_vid()
 
 
 def embed_cpu(args: argparse.Namespace, db: Database, lock: mp.Lock, counter: mp.Value):
@@ -151,6 +152,7 @@ def embed_cpu(args: argparse.Namespace, db: Database, lock: mp.Lock, counter: mp
     # Last batch if queue is not full
     if cpu_queue:
         fprint_cpu(cpu_queue, args, db, lock, counter)
+    db.rename_vid()
 
 
 def create_index(db: Database):
@@ -212,7 +214,6 @@ def main():
         embed_gpu(args, db, lock, counter)
     else:
         embed_cpu(args, db, lock, counter)
-    db.rename_vid()
 
     # Create index and cache db info
     os.environ['OMP_NUM_THREADS'] = str(args.cpu)
