@@ -5,17 +5,13 @@
 This project uses ESM-2 to generate embeddings and contact maps for protein sequences and then performs iDCT quantization on their RecCut predicted domains to generate DCT representations, or fingerprints, for quick and accurate similarity searches.
 
 ## Installation and Dependencies
-To install this respository:
+With git and conda installed, you can clone the repository and install the required dependencies with the following commands:
 
 ```
 git clone https://github.com/biovino1/DCTSearch
 cd DCTSearch
-```
-
-With conda installed, you can create a new environment with the required dependencies with the following commands:
-
-```
 conda env create -f env.yml
+g++ -o scripts/RecCut scripts/RecCut.cpp
 ```
 
 ## Creating a DCT Fingerprint Database
@@ -25,7 +21,7 @@ To create a database of DCT fingerprints for which you can query against, run th
 python scripts/make_db.py --fafile <.fa file> --dbfile <output>
 ```
 
-This will generate a SQLite database file with one table containing a protein id, sequence, list of domains, and DCT fingerprints for each sequence in the fasta file. If the process is interrupted for any reason, you can restart it and the script will skip any sequences that have already had fingerprints generated.
+This will generate a SQLite database file with two tables containing, one for protein sequences and one for DCT fingerprints. If the process is interrupted for any reason, you can restart it and every sequence that has already had fingerprints generated will be skipped.
 
 You can interact with the database like any other SQLite database, but database.py provides a simple interface to interact with the database. For example, the following command will print basic information about the database, such the number of sequences, average length of sequences, and the number of fingerprints in the database:
 

@@ -91,7 +91,7 @@ class Fingerprint:
         # Get top contacts then predict domains
         filename = f'{self.pid}.ce'
         self.writece(filename, threshold)
-        command = ['scripts/RecCut', '--input', filename, '--name', f'{self.pid}']
+        command = ['./RecCut', '--input', filename, '--name', f'{self.pid}']
         result = sp.run(command, stdout=sp.PIPE, text=True, check=True)
         os.remove(filename)
 
@@ -153,14 +153,11 @@ class Fingerprint:
         try:
             beg, end = dom.split('-')
             dom_emb = embed[int(beg)-1:int(end), :]
-        except (TypeError, IndexError, ValueError):  # discontinuous domain
+        except ValueError:  # discontinuous domain
             dom_emb = np.empty((0, embed.shape[1]))
             dom = dom.split(',')
             for do in dom:
-                try:
-                    beg, end = do.split('-')
-                except (TypeError, IndexError, ValueError):  # UNKNOWN RECCUT ERROR
-                    print(f'RecCut Error with {self.pid}, {dom}')
+                beg, end = do.split('-')
                 dom_emb = np.append(dom_emb, embed[int(beg)-1:int(end), :], axis=0)
             dom = ','.join(dom)  # convert back to string for dict key
 
