@@ -91,7 +91,7 @@ class Fingerprint:
         # Get top contacts then predict domains
         filename = f'{self.pid}.ce'
         self.writece(filename, threshold)
-        command = ['./RecCut', '--input', filename, '--name', f'{self.pid}']
+        command = ['scripts/RecCut', '--input', filename, '--name', f'{self.pid}']
         result = sp.run(command, stdout=sp.PIPE, text=True, check=True)
         os.remove(filename)
 
@@ -138,30 +138,33 @@ class Fingerprint:
         return trans.T  #pylint: disable=E1101
 
 
-    def get_doms(self, embed: np.ndarray, dom: str) -> np.ndarray:
-        """Splits a domain string and returns embedding for corresponding region.
+    def get_doms(self, embed: np.ndarray, dom: str) -> tuple:
+        """Splits a domain string and returns the embedding for the corresonding region. Embeddings
+        are 0-indexed while domains are 1-indexed. Rarely, RecCut will predict a domain that is
+        longer than the sequence, in which case it is removed.
         
         Args:
             embed (np.ndarray): Embedding to split.
             dom (str): Domain string.
             
         Returns:
-            np.ndarray: Embedding for domain.
+            tuple: Embedding for the domain, domain string.
+
         """
+        
+        # Initialize emptry array for domain embeddings and split string in case of discont. domain
+        dom_emb = np.empty((0, embed.shape[1]))
+        split_dom = dom.split(',')
 
-        # Embedding (0-indexed) into domain (1-indexed)
-        try:
-            beg, end = dom.split('-')
-            dom_emb = embed[int(beg)-1:int(end), :]
-        except ValueError:  # discontinuous domain
-            dom_emb = np.empty((0, embed.shape[1]))
-            dom = dom.split(',')
-            for do in dom:
-                beg, end = do.split('-')
-                dom_emb = np.append(dom_emb, embed[int(beg)-1:int(end), :], axis=0)
-            dom = ','.join(dom)  # convert back to string for dict key
-
-        return dom_emb
+        # For each subdomain, append the embedding to the domain embedding
+        for do in split_dom:
+            beg, end = do.split('-')
+            if (int(beg) or int(end)) > embed.shape[0]:  # Domain predicted is too long
+                split_dom.remove(do)
+                continue
+            dom_emb = np.append(dom_emb, embed[int(beg)-1:int(end), :], axis=0)
+        
+        return dom_emb, ','.join(split_dom)
 
 
     def quantize(self, qdim: list):
@@ -178,17 +181,20 @@ class Fingerprint:
             n_dim, m_dim = qdim[i*2], qdim[i*2+1]
 
             # Quantize each domain
-            for dom in self.domains:
-                dom_emb = self.get_doms(embed, dom)
+            for domain in self.domains:
+                dom_emb, dom = self.get_doms(embed, domain)
+                if not dom_emb.size:  # If domain is too long, embedding of size 0 is returned
+                    continue
                 dct = self.idct_quant(dom_emb[1:len(dom_emb)-1], n_dim)  #pylint: disable=W0621
                 ddct = self.idct_quant(dct.T, m_dim).T
                 ddct = ddct.reshape(n_dim * m_dim)
                 ddct = (ddct*127).astype('int8')
                 self.quants.setdefault(dom, []).extend(ddct.tolist())
 
-        # Set all lists to numpy arrays
+        # Set lists of quants to numpy arrays, update domains in case of removal
         for key, value in self.quants.items():
             self.quants[key] = np.array(value)
+        self.domains = list(self.quants.keys())
 
 
     def save(self, filename: str, save_embed: bool = False):
