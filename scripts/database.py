@@ -4,6 +4,7 @@ __author__ = "Ben Iovino"
 __date__ = "3/18/24"
 """
 
+import datetime
 import sqlite3
 import os
 import numpy as np
@@ -22,27 +23,30 @@ class Database:
 
 
     def __init__(self, dbfile: str, fafile: str = None):
-        """Initializes database file and cursor. Will create new database if fasta file is given.
+        """Initializes database file and cursor. If a fasta file is given, sequences are read and
+        added to the database if they are not already present.
         
         Args:
             dbfile (str): Path to database file.
             fafile (str): Path to fasta file.
         """
 
-        # Check for .db file first
-        if os.path.exists(f'{os.path.splitext(dbfile)[0]}.db'):
-            print(f'Opening existing database: {os.path.splitext(dbfile)[0]}.db')
-            self.path = f'{os.path.splitext(dbfile)[0]}.db'
-            self.conn = sqlite3.connect(self.path)
-            self.cur = self.conn.cursor()
+        self.update = True  # Flag for updating metadata in database
+        if fafile:
+            print(f'Reading file: {fafile}')
+            self.path = dbfile
+            seqs = self.read_fasta(fafile)
+            self.init_db(seqs)
+
+        # Fasta file not necessary, open database if it exists
         else:
-            if fafile:
-                print(f'Creating new database: {os.path.splitext(dbfile)[0]}.db')
-                self.path = dbfile
-                seqs = self.read_fasta(fafile)
-                self.init_db(seqs)
+            if not os.path.exists(dbfile):
+                raise FileNotFoundError(f'Database file not found: {dbfile}')
             else:
-                print('No database file found. Provide a fasta file to create a new database.')
+                print(f'Opening database: {dbfile}')
+                self.path = os.path.splitext(dbfile)[0]
+                self.conn = sqlite3.connect(f'{self.path}.db')
+                self.cur = self.conn.cursor()
 
     
     def close(self):
@@ -93,7 +97,7 @@ class Database:
         self.cur = self.conn.cursor()
 
         # Create table for protein sequences
-        table = """CREATE TABLE sequences (
+        table = """CREATE TABLE IF NOT EXISTS sequences (
                 pid text PRIMARY KEY,
                 sequence text NOT NULL,
                 length integer NOT NULL,
@@ -102,7 +106,7 @@ class Database:
         self.cur.execute(table)
 
         # Create table for domain fingerprints
-        table = """CREATE TABLE fingerprints (
+        table = """CREATE TABLE IF NOT EXISTS fingerprints (
                 vid integer PRIMARY KEY,
                 domain text NOT NULL,
                 fingerprint blob NOT NULL,
@@ -111,8 +115,18 @@ class Database:
                 ); """
         self.cur.execute(table)
 
+        # Create table for metadata
+        table = """CREATE TABLE IF NOT EXISTS metadata (
+                datetime text PRIMARY KEY,
+                seq_num integer NOT NULL,
+                avg_len real NOT NULL,
+                fp_num integer NOT NULL,
+                seqs_fp string NOT NULL
+                ); """
+        self.cur.execute(table)
+
         # Insert sequences
-        insert = """ INSERT INTO sequences(pid, sequence, length, fpcount)
+        insert = """ INSERT OR IGNORE INTO sequences(pid, sequence, length, fpcount)
             VALUES(?, ?, ?, ?) """
         for pid, seq in seqs.items():
             self.cur.execute(insert, (pid, seq, len(seq), 0))
@@ -158,10 +172,11 @@ class Database:
         try:
             yield [(last_seq[0], last_seq[1])]
         except UnboundLocalError:
-            if seqs:  # only one sequence in fasta/database
+            if seqs:  # Only one sequence in fasta/database
                 yield seqs
             else:
-                print('No sequences to fingerprint!')
+                self.update = False  # No sequences means no need to update metadata
+                print('No sequences to fingerprint!\n')
 
     
     def get_last_vid(self) -> int:
@@ -261,24 +276,47 @@ class Database:
         self.conn.commit()
 
 
-    def db_info(self):
-        """Prints information about the database.
+    def update_metadata(self):
+        """Updates metadata in the database.
         """
 
-        # Number of sequences
         select = """ SELECT COUNT(*) FROM sequences """
         num_seqs = self.cur.execute(select).fetchone()[0]
-        print(f'Number of sequences: {num_seqs}')
-
-        # Average sequence length
-        select = """ SELECT AVG(length) FROM sequences """
+        select = """ SELECT AVG(length) FROM sequences """  
         avg_len = self.cur.execute(select).fetchone()[0]
-        print(f'Average sequence length: {avg_len:.2f}')
-
-        # Number of domains in the database
         select = """ SELECT SUM(fpcount), COUNT(*) FROM sequences WHERE fpcount > 0 """
         nom_dom, dom_seqs = self.cur.execute(select).fetchone()
-        print(f'Number of fingerprints: {nom_dom} ({dom_seqs}/{num_seqs} sequences)\n')
+
+        # Insert new metadata
+        insert = """ INSERT INTO metadata(datetime, seq_num, avg_len, fp_num, seqs_fp)
+            VALUES(?, ?, ?, ?, ?) """
+        date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+        self.cur.execute(insert, (date, num_seqs, avg_len, nom_dom, f'{dom_seqs}/{num_seqs}'))
+        self.conn.commit()
+        self.print_metadata()
+
+
+    def print_metadata(self):
+        """Prints metadata from the database.
+        """
+
+        select = """ SELECT * FROM metadata ORDER BY datetime DESC LIMIT 1 """
+        metadata = self.cur.execute(select).fetchone()
+        print(f'Last Updated: {metadata[0]}')
+        print(f'Number of Sequences: {metadata[1]}')
+        print(f'Average Sequence Length: {metadata[2]:.2f}')
+        print(f'Number of Fingerprints: {metadata[3]} ({metadata[4]} fingerprinted)\n')
+
+
+    def db_info(self):
+        """Prints information about the database, updating metadata if necessary.
+        """
+
+        if self.update:
+            print('\nUpdating metadata...')
+            self.update_metadata()
+        else:
+            self.print_metadata()
 
 
     def seq_info(self, seq: str):

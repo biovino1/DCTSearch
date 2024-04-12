@@ -190,7 +190,7 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--fafile', type=str, required=True, help='fasta file to embed')
+    parser.add_argument('--fafile', type=str, required=False, help='fasta file to embed')
     parser.add_argument('--dbfile', type=str, required=True, help='db file to write to')
     parser.add_argument('--out', type=str, default=False, help='output file')
     parser.add_argument('--maxlen', type=int, default=1000, help='max sequence length to embed')
@@ -214,12 +214,12 @@ def main():
         embed_gpu(args, db, lock, counter)
     else:
         embed_cpu(args, db, lock, counter)
-
-    # Create index and cache db info
-    os.environ['OMP_NUM_THREADS'] = str(args.cpu)
-    print('\nCreating index...')
-    create_index(db)
     db.db_info()
+
+    # Create index
+    os.environ['OMP_NUM_THREADS'] = str(args.cpu)
+    print('Creating index...')
+    create_index(db)
     db.close()
 
 

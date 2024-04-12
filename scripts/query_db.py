@@ -64,6 +64,7 @@ def search_db(args: argparse.Namespace, query_db: str, fp_db: str):
     # Connect to databases
     query_db = Database(query_db)
     query_db.db_info()
+    print('Loading index...\n')
     index = faiss.read_index(fp_db.replace('.db', '.index'))
     fp_db = Database(fp_db)
 
@@ -97,9 +98,11 @@ def main():
     args = parser.parse_args()
 
     # Logging for either stdout or file
-    logging.basicConfig(level=logging.INFO, format='%(message)s')
     if args.out:
-        logging.basicConfig(filename=args.out, filemode='w')
+        logging.basicConfig(level=logging.INFO, filename=args.out,
+                             filemode='w', format='%(message)s')
+    else:
+        logging.basicConfig(level=logging.INFO, format='%(message)s')
 
     # Embed query sequences
     query_db = os.path.splitext(args.query)[0]
