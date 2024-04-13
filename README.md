@@ -11,14 +11,14 @@ With git and conda installed, you can clone the repository and install the requi
 git clone https://github.com/biovino1/DCTSearch
 cd DCTSearch
 conda env create -f env.yml
-g++ -o scripts/RecCut scripts/RecCut.cpp
+g++ -o src/RecCut src/RecCut.cpp
 ```
 
 ## Creating a DCT Fingerprint Database
 To create a database of DCT fingerprints for which you can query against, run the following command:
 
 ```
-python scripts/make_db.py --fafile <.fa file> --dbfile <output>
+python src/make_db.py --fafile <.fa file> --dbfile <output>
 ```
 
 This will generate a SQLite database file with two tables containing, one for protein sequences and one for DCT fingerprints. If the process is interrupted for any reason, you can restart it and every sequence that has already had fingerprints generated will be skipped.
@@ -44,14 +44,14 @@ Embedding protein sequences can be a memory-intensive process. To allow for the 
 Generating fingerprints from these embeddings is much less memory intensive, but is performed only on the CPU. You can specify the number of CPU cores to use with the '--cpu' parameter to fingerprint multiple sequences at once. For example, the command below will embed sequences on one GPU and fingerprint them on 12 CPU cores:
 
 ```
-python scripts/make_db.py --fafile <.fa file> --dbfile <output> --gpu 1 --cpu 12
+python src/make_db.py --fafile <.fa file> --dbfile <output> --gpu 1 --cpu 12
 ```
 
 ## Querying a DCT Fingerprint Database
 You can query a DCT fingerprint database with a fasta file containing one or more protein sequences with the following command:
 
 ```
-python scripts/query_db.py --query <.fa file> --db <.db file>
+python src/query_db.py --query <.fa file> --db <.db file>
 ```
 
 Again, you can change the '--maxlen', '--cpu', and '--gpu' parameters to suit your system's hardware.
