@@ -31,7 +31,6 @@ class Database:
             fafile (str): Path to fasta file.
         """
 
-        self.update = True  # Flag for updating metadata in database
         if fafile:
             print(f'Reading file: {fafile}')
             self.path = dbfile
@@ -95,6 +94,7 @@ class Database:
         self.path = os.path.splitext(self.path)[0]
         self.conn = sqlite3.connect(f'{self.path}.db')
         self.cur = self.conn.cursor()
+        self.update = False  # Flag for updating metadata in database
 
         # Create table for protein sequences
         table = """CREATE TABLE IF NOT EXISTS sequences (
@@ -146,6 +146,7 @@ class Database:
             list: List of tuples where elements are protein ID and sequence.
         """
 
+        self.update = True  # Assume sequences are being added to database
         seqs, curr_len, min_size = [], 0, dim1*dim2
         select = """ SELECT pid, sequence, length FROM sequences WHERE fpcount = 0 """
         rows = self.cur.execute(select).fetchall()
@@ -175,7 +176,7 @@ class Database:
             if seqs:  # Only one sequence in fasta/database
                 yield seqs
             else:
-                self.update = False  # No sequences means no need to update metadata
+                self.update = False  # No sequences added, no need for update
                 print('No sequences to fingerprint!\n')
 
     
@@ -286,11 +287,13 @@ class Database:
         avg_len = self.cur.execute(select).fetchone()[0]
         select = """ SELECT SUM(fpcount), COUNT(*) FROM sequences WHERE fpcount > 0 """
         nom_dom, dom_seqs = self.cur.execute(select).fetchone()
+        if not nom_dom:
+            nom_dom = 0
 
         # Insert new metadata
         insert = """ INSERT INTO metadata(datetime, seq_num, avg_len, fp_num, seqs_fp)
             VALUES(?, ?, ?, ?, ?) """
-        date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+        date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         self.cur.execute(insert, (date, num_seqs, avg_len, nom_dom, f'{dom_seqs}/{num_seqs}'))
         self.conn.commit()
         self.print_metadata()

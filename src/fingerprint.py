@@ -91,7 +91,7 @@ class Fingerprint:
         # Get top contacts then predict domains
         filename = f'{self.pid}.ce'
         self.writece(filename, threshold)
-        command = ['scripts/RecCut', '--input', filename, '--name', f'{self.pid}']
+        command = ['src/RecCut', '--input', filename, '--name', f'{self.pid}']
         result = sp.run(command, stdout=sp.PIPE, text=True, check=True)
         os.remove(filename)
 

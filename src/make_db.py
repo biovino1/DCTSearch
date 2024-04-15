@@ -194,6 +194,7 @@ def main():
     parser.add_argument('--dbfile', type=str, required=True, help='db file to write to')
     parser.add_argument('--out', type=str, default=False, help='output file')
     parser.add_argument('--maxlen', type=int, default=1000, help='max sequence length to embed')
+    parser.add_argument('--index', action='store_false', help='create index')
     parser.add_argument('--cpu', type=int, default=1, help='number of cpus to use')
     parser.add_argument('--gpu', type=int, required=False, help='number of gpus to use')
     args = parser.parse_args()
@@ -217,9 +218,10 @@ def main():
     db.db_info()
 
     # Create index
-    os.environ['OMP_NUM_THREADS'] = str(args.cpu)
-    print('Creating index...')
-    create_index(db)
+    if args.index:
+        os.environ['OMP_NUM_THREADS'] = str(args.cpu)
+        print('Creating index...')
+        create_index(db)
     db.close()
 
 
