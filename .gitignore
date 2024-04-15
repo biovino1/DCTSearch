@@ -3,3 +3,5 @@
 /tests/__pycache__/
 /src/roc.ipynb
 /src/RecCut
+/bench/cath/data
+/bench/cath/__pycache__/
