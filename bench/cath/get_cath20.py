@@ -33,7 +33,7 @@ def get_files(path: str):
 
 
 def read_classes(path: str) -> dict[str, str]:
-    """Modifies headers in cath20.fa to include homologous superfamily classification.
+    """Returns dictionary containing classification for every protein in CATH20.
 
     Args:
         path (str): Path that contains cath20.fa and cath20_class.txt.
@@ -63,11 +63,14 @@ def modify_fasta(path: str, classes: dict[str, str]):
 
     # Read fasta file for CATH IDs and sequences
     seqs: dict[str, str] = {}  # key: CATH ID, value: sequence
+    queries: dict[str, list: str] = {}  # key: classification, value: list of pid's in same class
     with open(f'{path}/cath20.fa', 'r', encoding='utf8') as file:
         for line in file:
             if line.startswith('>'):
-                cath_id = line.split('|')[2].split('/')[0]
-                cath_id = cath_id + '|' + classes[cath_id]
+                cath_id = line.split('|')[2].split('/')[0]  # i.e. 16vpA00
+                class_id = classes[cath_id]  # i.e. 3.30.930.10
+                cath_id = cath_id + '|' + class_id
+                queries[class_id] = queries.get(class_id, []) + [cath_id]
             else:
                 seqs[cath_id] = line.strip()
 
@@ -75,6 +78,14 @@ def modify_fasta(path: str, classes: dict[str, str]):
     with open(f'{path}/cath20.fa', 'w', encoding='utf8') as file:
         for cath_id, seq in seqs.items():
             file.write(f'>{cath_id}\n{seq}\n')
+
+    # Write queries to file
+    with open(f'{path}/cath20_queries.txt', 'w', encoding='utf8') as file:
+        for class_id, pids in queries.items():
+            if len(pids) > 1:  # Ignore families with only one member
+                for pid in pids:  # Write each protein in family to separate line
+                    pid = pid.split('|')[0]
+                    file.write(f'{pid}\t{class_id}\n')
 
 
 def main():
