@@ -6,6 +6,8 @@ __date__ = "4/13/24"
 
 import argparse
 import os
+import sys
+sys.path.append(os.getcwd()+'/src')  # Add src to path
 import subprocess as sp
 from urllib.request import urlretrieve
 
@@ -90,6 +92,14 @@ def modify_fasta(path: str, classes: dict[str, str]):
 
 def main():
     """Downloads CATH20 v4.2.0 and fingerprints sequences.
+
+    CATH List File (CLF) Format 2.0
+    -------------------------------
+    Column 1:  CATH domain name (seven characters)
+    Column 2:  Class number
+    Column 3:  Architecture number
+    Column 4:  Topology number
+    Column 5:  Homologous superfamily number
     """
 
     parser = argparse.ArgumentParser()
@@ -107,10 +117,10 @@ def main():
     # Fingerprint fasta file
     if args.gpu:
         sp.run(['python', 'src/make_db.py', f'--fafile={path}/cath20.fa', f'--dbfile={path}/cath20',
-                f'--maxlen={args.maxlen}', '--index', f'--cpu={args.cpu}', f'--gpu={args.gpu}'])
+                f'--maxlen={args.maxlen}', f'--cpu={args.cpu}', f'--gpu={args.gpu}'])
     else:
         sp.run(['python', 'src/make_db.py', f'--fafile={path}/cath20.fa', f'--dbfile={path}/cath20',
-            f'--maxlen={args.maxlen}', '--index', f'--cpu={args.cpu}'])
+            f'--maxlen={args.maxlen}', f'--cpu={args.cpu}'])
 
 
 if __name__ == "__main__":
