@@ -14,7 +14,7 @@ from database import Database
 from make_db import embed_cpu, embed_gpu
 
 
-def get_top_hits(dm: np.ndarray, im: np.ndarray, top: int, fp_db: Database, query_db: Database):
+def get_top_hits(dm: np.ndarray, im: np.ndarray, top: int, fp_db: Database, query_db: Database, que_ind: list):
     """Logs the top hits for each query sequence. Distance and index matrices are of dimensions
     (number of query fingerprints x khits). Indices correspond to vector ID's (vid) in the
     fingerprint databases.
@@ -25,6 +25,7 @@ def get_top_hits(dm: np.ndarray, im: np.ndarray, top: int, fp_db: Database, quer
         top (int): Number of top hits to return
         fp_db (Database): Database object for fingerprint database
         query_db (Database): Database object for query database
+        que_ind (list): List of query vector ID's, allows for querying db against itself
     """
 
     # Store all hits in a dict and sort by distance
@@ -41,15 +42,15 @@ def get_top_hits(dm: np.ndarray, im: np.ndarray, top: int, fp_db: Database, quer
         db_vid = int(im[index[0], index[1]])
         if db_vid == -1:  # No more hits
             break
-        q_vid = int(index[0])
+        q_vid = int(que_ind[index[0]])
 
         # Log results
         select = """ SELECT pid, domain FROM fingerprints WHERE vid = ? """
         db_pid, db_domain = fp_db.cur.execute(select, (db_vid+1,)).fetchone()
-        q_pid, q_domain = query_db.cur.execute(select, (q_vid+1,)).fetchone()
+        q_pid, q_domain = query_db.cur.execute(select, (q_vid,)).fetchone()  # not taken from faiss
         logging.info('Query: %s %s, Result %s: %s %s, Distance: %s',
                       q_pid, q_domain, i+1, db_pid, db_domain, top_hits[index])
-    print()
+    logging.info('')
 
 
 def search_db(args: argparse.Namespace, query_db: str, fp_db: str):
@@ -74,9 +75,10 @@ def search_db(args: argparse.Namespace, query_db: str, fp_db: str):
     print('Querying database...\n')
     for query in query_fps:
         qfps = query_db.load_fprints(pid=query[0])
-        que = np.array([fp[1] for fp in qfps])
-        dm, im = index.search(que, args.khits)  # distance, index matrices
-        get_top_hits(dm, im, args.khits, fp_db, query_db)
+        que_arr = np.array([fp[1] for fp in qfps])
+        que_ind = np.array([fp[0] for fp in qfps])
+        dm, im = index.search(que_arr, args.khits)  # distance, index matrices
+        get_top_hits(dm, im, args.khits, fp_db, query_db, que_ind)
 
     query_db.close()
     fp_db.close()
@@ -105,7 +107,7 @@ def main():
         logging.basicConfig(level=logging.INFO, format='%(message)s')
 
     # Embed query sequences
-    query_db = os.path.splitext(args.query)[0]
+    query_db = os.path.splitext(args.query)[0]+'.db'
     db = Database(query_db, args.query)
     vid = db.get_last_vid()
     lock, counter = mp.Lock(), mp.Value('i', vid)
@@ -113,6 +115,7 @@ def main():
         embed_gpu(args, db, lock, counter)
     else:
         embed_cpu(args, db, lock, counter)
+    db.db_info()
 
     # Query database for most similar sequence
     os.environ['OMP_NUM_THREADS'] = str(args.cpu)

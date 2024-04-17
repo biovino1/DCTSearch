@@ -31,7 +31,7 @@ class Database:
             fafile (str): Path to fasta file.
         """
 
-        if fafile:
+        if fafile and fafile.endswith('.fa'):
             print(f'Reading file: {fafile}')
             self.path = dbfile
             seqs = self.read_fasta(fafile)
@@ -46,6 +46,7 @@ class Database:
                 self.path = os.path.splitext(dbfile)[0]
                 self.conn = sqlite3.connect(f'{self.path}.db')
                 self.cur = self.conn.cursor()
+                self.update = False
 
     
     def close(self):
