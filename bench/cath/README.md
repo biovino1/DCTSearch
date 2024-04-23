@@ -11,6 +11,16 @@ You can prepare the cath20 dataset by running the follow command from the root d
 python -m bench.cath.get_cath20
 ```
 
+This command will download the dataset and fingerprint each sequence, as well as prepare the query sequences.
+
+The benchmark can then be run with the following command:
+
+```
+python -m bench.cath.run_cath20
+```
+
+This will search the queries against the database and calculate/graph the AUC1 score for each query.
+
 ## References
 
 [1] Schütze, Konstantin, et al. "Nearest neighbor search on embeddings rapidly identifies distant protein relations." Frontiers in Bioinformatics 2 (2022): 1033775.
