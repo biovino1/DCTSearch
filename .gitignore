@@ -5,3 +5,5 @@
 /src/RecCut
 /bench/cath/data
 /bench/cath/__pycache__/
+/bench/scop/data
+/bench/scop/__pycache__/

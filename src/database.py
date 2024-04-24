@@ -31,7 +31,7 @@ class Database:
             fafile (str): Path to fasta file.
         """
 
-        if fafile and fafile.endswith('.fa'):
+        if fafile and (fafile.endswith('.fa') or fafile.endswith('.fasta')):
             print(f'Reading file: {fafile}')
             self.path = dbfile
             seqs = self.read_fasta(fafile)
