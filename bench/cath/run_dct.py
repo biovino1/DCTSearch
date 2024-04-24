@@ -1,4 +1,4 @@
-"""Queries CATH20 database with sequences from cath20_queries.txt.
+"""Queries CATH20 database with sequences from cath20_queries.txt using DCTSearch.
 
 __author__ = "Ben Iovino"
 __date__ = "4/16/24"
@@ -7,7 +7,6 @@ __date__ = "4/16/24"
 import argparse
 import faiss
 import logging
-import matplotlib.pyplot as plt
 import os
 import sys
 sys.path.append(os.getcwd()+'/src')  # Add src to path
@@ -29,8 +28,9 @@ def get_queries(path: str) -> dict[str, str]:
     queries = {}
     with open(f'{path}/cath20_queries.txt', 'r', encoding='utf8') as file:
         for line in file:
-            line = line.split()
-            queries[line[0]] = line[1]
+            if line.startswith('>'):
+                line = line.split()
+                queries[line[0][1:]] = line[1]  # key: PID, value: classification
 
     return queries
 
@@ -58,7 +58,7 @@ def search_cath20(path: str, queries: dict[str, str], khits: int):
     db.close()
 
 
-def get_results(path: str) -> dict[str, set]:
+def dct_results(path: str) -> dict[str, set]:
     """Returns dictionary of query PID's and a set of TP's up to first FP.
 
     Args:
@@ -68,7 +68,7 @@ def get_results(path: str) -> dict[str, set]:
         dict[str, set]: key: query PID, value: set of TP sequences
     """
 
-    with open(f'{path}/cath20_results.txt', 'r', encoding='utf8') as file:
+    with open(f'{path}/results_dct.txt', 'r', encoding='utf8') as file:
         results: dict[str, set] = {}
         query, fp = '', False 
         for line in file:
@@ -93,53 +93,6 @@ def get_results(path: str) -> dict[str, set]:
     return results
 
 
-def eval_results(path: str, results: dict[str, set]):
-    """Returns dict of AUC1 scores for each query. AUC1 is calculated as the number of TP's
-    up to the 1st FP divided by the number of sequences in the family.
-
-    Args:
-        path (str): Path to results file
-        results (dict[str, set]): Dictionary of query PID's and a set of TP's up to the 1st FP.
-
-    Returns:
-        dict[str, float]: key: query PID, value: AUC1 score
-    """
-
-    # Read number of sequences in each family
-    with open(f'{path}/cath20_queries.txt', 'r', encoding='utf8') as file:
-        fams = {}
-        for line in file:
-            fam = line.split()[1]
-            fams[fam] = fams.get(fam, 0) + 1
-    
-    # Calculate AUC1
-    scores: dict[str, float] = {}
-    for query, tps in results.items():
-        fam = query.split('|')[1]
-        scores[query] = scores.get(query, 0) + len(tps) / (fams[fam]-1)  # ignore self hit
-    
-    return scores
-
-
-def graph_results(scores: dict[str, float]):
-    """Graphs AUC1 scores for each query.
-
-    Args:
-        queries (dict[str, float]): Dictionary of query PID's and AUC1 scores
-    """
-
-    y = range(len(scores))
-    x = sorted(list(scores.values()), reverse=True)
-    _, ax = plt.subplots()
-    ax.plot(x, y, label='MMseqs2', color='red')
-    ax.set_title('AUC1 of Queries')
-    ax.set_xlabel('AUC1')
-    ax.set_ylabel('Query')
-    ax.legend(title='Search Tool', labels=['DCTSearch'])
-    ax.set_title('AUC1 Scores for CATH20 Queries')
-    plt.show()
-
-
 def main():
     """
     """
@@ -152,15 +105,12 @@ def main():
     # Read queries sequences
     path = 'bench/cath/data'
     queries = get_queries(path)
-    logging.basicConfig(level=logging.INFO, filename=f'{path}/cath20_results.txt',
+    logging.basicConfig(level=logging.INFO, filename=f'{path}/results_dct.txt',
                          filemode='w', format='%(message)s')
     
     # Get queries from CATH20 database and get top1/AUC1
     os.environ['OMP_NUM_THREADS'] = str(args.cpu)
     search_cath20(path, queries, args.khits)
-    results = get_results(path)
-    queries = eval_results(path, results)
-    graph_results(queries)
         
 
 if __name__ == '__main__':

@@ -13,13 +13,15 @@ python -m bench.cath.get_cath20
 
 This command will download the dataset and fingerprint each sequence, as well as prepare the query sequences.
 
-The benchmark can then be run with the following command:
+The benchmark can then be run and evaluated using the following commands:
 
 ```
 python -m bench.cath.run_cath20
+python -m bench.cath.run_mmseqs
+python -m bench.cath.plot_results
 ```
 
-This will search the queries against the database and calculate/graph the AUC1 score for each query.
+This will search the queries against the database using all benchmarked methods and plot the AUC1 curves for each method.
 
 ## References
 

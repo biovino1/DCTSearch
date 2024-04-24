@@ -82,12 +82,11 @@ def modify_fasta(path: str, classes: dict[str, str]):
             file.write(f'>{cath_id}\n{seq}\n')
 
     # Write queries to file
-    with open(f'{path}/cath20_queries.txt', 'w', encoding='utf8') as file:
-        for class_id, pids in queries.items():
-            if len(pids) > 1:  # Ignore families with only one member
-                for pid in pids:  # Write each protein in family to separate line
-                    pid = pid.split('|')[0]
-                    file.write(f'{pid}\t{class_id}\n')
+    with open(f'{path}/cath20_queries.fa', 'w', encoding='utf8') as file:
+        for class_id, cath_ids in queries.items():
+            if len(cath_ids) > 1:  # Ignore families with only one member
+                for cath_id in cath_ids:  # Write each protein in family
+                    file.write(f'>{cath_id}\n{seqs[cath_id]}\n')
 
 
 def main():
