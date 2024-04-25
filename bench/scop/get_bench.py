@@ -36,6 +36,40 @@ def get_files(path: str):
     urlretrieve(url, f'{path}/scop_class.txt')
 
 
+def get_unshuffled(path: str):
+    """Get unshuffled query sequences from the target database.
+
+    Args:
+        path (str): Path to query/targetdb
+    """
+
+    # Read each sequence in query file
+    queries = []
+    with open(f'{path}/mmseqs2-benchmark-pub/db/query.fasta', 'r') as file:
+        for line in file:
+            if line.startswith('>'):
+                pid = line.split()[0][1:].split('_')[0]
+                queries.append(pid)
+
+    # Get sequence of each query from target database
+    seqs = {}
+    with open(f'{path}/mmseqs2-benchmark-pub/db/targetannotation.fasta', 'r') as file:
+        pid, desc = '', ''
+        for line in file:
+            if line.startswith('>'):
+                line = line.split()
+                pid = line[0].split('_')[1]
+                desc = ' '.join(line[1:])
+                continue
+            if pid in queries:
+                seqs[pid] = (desc, line.strip())
+    
+    # Write sequences to file
+    with open(f'{path}/mmseqs2-benchmark-pub/db/uquery.fasta', 'w') as file:
+        for pid, (desc, seq) in seqs.items():
+            file.write(f'>{pid} {desc}\n{seq}\n')
+
+
 def main():
     """Downloads MMseqs2 benchmark and fingerprints sequences. Fingerprinting this database can
     take several days so it is recommended to run this script on a server with GPU support.
@@ -57,6 +91,7 @@ def main():
     path = 'bench/scop/data'
     if not os.path.exists(path):
         get_files(path)
+        get_unshuffled(path)
 
     # Fingerprint fasta file
     db = 'mmseqs2-benchmark-pub/db/targetannotation.fasta'
