@@ -64,29 +64,29 @@ def modify_fasta(path: str, classes: dict[str, str]):
     """
 
     # Read fasta file for CATH IDs and sequences
-    seqs: dict[str, str] = {}  # key: CATH ID, value: sequence
+    seqs: dict[str, str] = {}  # key: "CATH ID|CATH CLASS", value: sequence
     queries: dict[str, list: str] = {}  # key: classification, value: list of pid's in same class
     with open(f'{path}/cath20.fa', 'r', encoding='utf8') as file:
         for line in file:
             if line.startswith('>'):
                 cath_id = line.split('|')[2].split('/')[0]  # i.e. 16vpA00
                 class_id = classes[cath_id]  # i.e. 3.30.930.10
-                cath_id = cath_id + '|' + class_id
                 queries[class_id] = queries.get(class_id, []) + [cath_id]
             else:
-                seqs[cath_id] = line.strip()
+                seqs[f'{cath_id}|{class_id}'] = line.strip()  # i.e. 16vpA00|3.30.930.10
 
     # Rewrite fasta file with modified headers
     with open(f'{path}/cath20.fa', 'w', encoding='utf8') as file:
-        for cath_id, seq in seqs.items():
-            file.write(f'>{cath_id}\n{seq}\n')
+        for pid, seq in seqs.items():
+            file.write(f'>{pid}\n{seq}\n')
 
     # Write queries to file
     with open(f'{path}/cath20_queries.fa', 'w', encoding='utf8') as file:
         for class_id, cath_ids in queries.items():
             if len(cath_ids) > 1:  # Ignore families with only one member
                 for cath_id in cath_ids:  # Write each protein in family
-                    file.write(f'>{cath_id}\n{seqs[cath_id]}\n')
+                    pid = f'{cath_id}|{class_id}'
+                    file.write(f'>{cath_id} {class_id}\n{seqs[pid]}\n')
 
 
 def main():

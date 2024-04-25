@@ -15,18 +15,18 @@ from src.database import Database
 from src.query_db import get_top_hits
 
 
-def get_queries(path: str) -> dict[str, str]:
-    """Returns a dictionary of query PID's and their homologous superfamily classifcation.
+def get_queries(file: str) -> dict[str, str]:
+    """Returns a dictionary of query PID's and their classification.
 
     Args:
-        path (str): Path to cath20_queries.txt.
+        file (str): Path to queries file.
     
     Returns:
         dict[str, str]: key: PID, value: classification
     """
 
     queries = {}
-    with open(f'{path}/cath20_queries.txt', 'r', encoding='utf8') as file:
+    with open(file, 'r', encoding='utf8') as file:
         for line in file:
             if line.startswith('>'):
                 line = line.split()
@@ -104,7 +104,7 @@ def main():
 
     # Read queries sequences
     path = 'bench/cath/data'
-    queries = get_queries(path)
+    queries = get_queries(f'{path}/cath20_queries.fa')
     logging.basicConfig(level=logging.INFO, filename=f'{path}/results_dct.txt',
                          filemode='w', format='%(message)s')
     
