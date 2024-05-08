@@ -58,49 +58,6 @@ def search_cath20(path: str, queries: dict[str, str], khits: int):
     db.close()
 
 
-def dct_results(path: str) -> dict[str, set]:
-    """Returns a dictionary of query PID's and their top hits until the first FP. Only one hit per
-    unique sequence is counted, hence the use of a set. This allows for the calculation of both
-    AUC1 and top1 scores.
-
-    Args:
-        path (str): Path to results file
-
-    Returns:
-        dict[str, set]: key: query PID, value: set of top hits until the first FP
-    """
-
-    with open(f'{path}/results_dct.txt', 'r', encoding='utf8') as file:
-        results, curr_query = {}, ''
-        for line in file:
-            if line == '\n':
-                continue
-            line = line.split()
-
-            # If query had FP, continue until new query
-            query = line[1]
-            result = line[5]
-            if query == curr_query:
-                continue
-            results[query] = results.get(query, set())
-
-            # Ignore self-hits
-            if query == result:
-                continue
-
-            # Stop counting hits for current query if domains are different
-            query_dom = query.split('|')[1]
-            result_dom = result.split('|')[1]
-            if query_dom != result_dom:
-                curr_query = query
-                continue
-
-            # Add hit to results
-            results[query].add(result)
-
-    return results
-
-
 def main():
     """
     """

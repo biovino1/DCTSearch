@@ -86,7 +86,7 @@ def modify_fasta(path: str, classes: dict[str, str]):
             if len(cath_ids) > 1:  # Ignore families with only one member
                 for cath_id in cath_ids:  # Write each protein in family
                     pid = f'{cath_id}|{class_id}'
-                    file.write(f'>{cath_id} {class_id}\n{seqs[pid]}\n')
+                    file.write(f'>{cath_id}|{class_id}\n{seqs[pid]}\n')
 
 
 def main():
