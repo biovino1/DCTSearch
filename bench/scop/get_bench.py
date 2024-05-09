@@ -36,6 +36,30 @@ def get_files(path: str):
     urlretrieve(url, f'{path}/scop_class.txt')
 
 
+def modify_fasta(path: str):
+    """Modifies headers in targetannotation.fasta to only include PID and sccs for each domain.
+
+    Args:
+        path (str): Path to target database.
+    """
+
+    with open(f'{path}/mmseqs2-benchmark-pub/db/targetannotation.fasta', 'r') as file:
+        lines = file.readlines()
+
+    with open(f'{path}/target.fa', 'w') as file:
+        for line in lines:
+            if line.startswith('>'):
+                head = []
+                for spl in line.split():
+                    if spl.startswith('|'):
+                        break
+                    head.append(spl)
+            else:
+                pid = head[0].split('_')[1]
+                desc = ';'.join(head[1:])
+                file.write(f'>{pid}|{desc}\n{line}')
+
+
 def get_unshuffled(path: str):
     """Get unshuffled query sequences from the target database.
 
@@ -63,11 +87,12 @@ def get_unshuffled(path: str):
                 continue
             if pid in queries:
                 seqs[pid] = (desc, line.strip())
-    
+                
     # Write sequences to file
-    with open(f'{path}/mmseqs2-benchmark-pub/db/uquery.fasta', 'w') as file:
+    with open(f'{path}/query.fasta', 'w') as file:
         for pid, (desc, seq) in seqs.items():
-            file.write(f'>{pid} {desc}\n{seq}\n')
+            doms = ';'.join(desc.split('|')[0].split())
+            file.write(f'>{pid}|{doms}\n{seq}\n')
 
 
 def main():
@@ -91,15 +116,15 @@ def main():
     path = 'bench/scop/data'
     if not os.path.exists(path):
         get_files(path)
+        modify_fasta(path)
         get_unshuffled(path)
 
     # Fingerprint fasta file
-    db = 'mmseqs2-benchmark-pub/db/targetannotation.fasta'
     if args.gpu:
-        sp.run(['python', 'src/make_db.py', f'--fafile={path}/{db}', f'--dbfile={path}/mmseqs2.db',
+        sp.run(['python', 'src/make_db.py', f'--fafile={path}/target.fa', f'--dbfile={path}/mmseqs2.db',
                 f'--maxlen={args.maxlen}', f'--cpu={args.cpu}', f'--gpu={args.gpu}'])
     else:
-        sp.run(['python', 'src/make_db.py', f'--fafile={path}/{db}', f'--dbfile={path}/mmseqs2.db',
+        sp.run(['python', 'src/make_db.py', f'--fafile={path}/target.fa', f'--dbfile={path}/mmseqs2.db',
             f'--maxlen={args.maxlen}', f'--cpu={args.cpu}'])
 
 
