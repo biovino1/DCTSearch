@@ -66,25 +66,41 @@ def eval_scores(path: str, results: dict[str, set]):
 
     # Read number of sequences in each family
     with open(f'{path}/cath20_queries.fa', 'r', encoding='utf8') as file:
-        fams = {}
+        fams: dict[str, list] = {}
         for line in file:
             if line.startswith('>'):
-                fam = line.split('|')[1].strip()
-                fams[fam] = fams.get(fam, 0) + 1
+                line = line.split('|')
+                dom, fam = line[0], line[1].strip()
+                fams[fam] = fams.get(fam, []) + [dom]
     
-    # Calculate AUC1
-    scores: dict[str, float] = {}
+    # Calculate scores
+    auc_scores: dict[str, float] = {}
+    fam_scores: dict[str, list[float, float]] = {}  # keep track of tp/total for each family
     top1, total = 0, 0
     for query, tps in results.items():
-        if len(tps) > 0:
-            top1 += 1
-        total += 1
-        fam = query.split('|')[1]
-        scores[query] = scores.get(query, 0) + (len(tps) / (fams[fam]-1))  # ignore self hit
 
-    print(f'Top1: {top1}/{total}, {(top1/total * 100):.2f}%')
+        # Get family and update scores
+        fam = query.split('|')[1]  # i.e. 16vpA00|3.30.930.10
+        fam_scores[fam] = fam_scores.get(fam, [0, 0])
+
+        # top1 - Add 1 if top hit belongs to same family
+        # fam_scores - Add 1 to total and top1 if top hit belongs to same family
+        if len(tps) > 0:  # If there are hits, that means top hit is TP
+            fam_scores[fam][0] += 1
+            top1 += 1
+        fam_scores[fam][1] += 1
+        total += 1
+        auc_scores[query] = auc_scores.get(query, 0) + (len(tps) / (len(fams[fam])-1))  # ignore self hit
+
+    # For each family, find number of true positives over total family size
+    fam_total = 0
+    for fam, (tp, tot) in fam_scores.items():
+        fam_total += (1/(tot)) * tp
     
-    return scores
+    print(f'QNormTop1: {(fam_total):.2f}/{len(fam_scores)}, {fam_total/len(fam_scores)*100:.2f}%')
+    print(f'QRawTop1: {top1}/{total}, {(top1/total * 100):.2f}%')
+    
+    return auc_scores
 
 
 def graph_results(scores: list[dict[str, float]]):
