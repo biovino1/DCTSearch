@@ -89,7 +89,7 @@ class Fingerprint:
         """
 
         # Get top contacts then predict domains
-        filename = f'{self.pid}.ce'
+        filename = f'{self.pid[:10]}.ce'  # incase pid is too long
         self.writece(filename, threshold)
         command = ['src/RecCut', '--input', filename, '--name', f'{self.pid}']
         result = sp.run(command, stdout=sp.PIPE, text=True, check=True)

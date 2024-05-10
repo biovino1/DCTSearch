@@ -306,10 +306,13 @@ class Database:
 
         select = """ SELECT * FROM metadata ORDER BY datetime DESC LIMIT 1 """
         metadata = self.cur.execute(select).fetchone()
-        print(f'Last Updated: {metadata[0]}')
-        print(f'Number of Sequences: {metadata[1]}')
-        print(f'Average Sequence Length: {metadata[2]:.2f}')
-        print(f'Number of Fingerprints: {metadata[3]} ({metadata[4]} fingerprinted)\n')
+        try:
+            print(f'Last Updated: {metadata[0]}')
+            print(f'Number of Sequences: {metadata[1]}')
+            print(f'Average Sequence Length: {metadata[2]:.2f}')
+            print(f'Number of Fingerprints: {metadata[3]} ({metadata[4]} fingerprinted)\n')
+        except TypeError:
+            self.update_metadata()
 
 
     def db_info(self):
