@@ -173,7 +173,7 @@ def create_index(db: Database):
     
     # Create index
     dim = fps.shape[1]  # dimension
-    index = faiss.IndexHNSWFlat(dim, 42)
+    index = faiss.IndexFlatL2(dim)
     index.add(fps)
     faiss.write_index(index, f'{db.path}.index')  # db.path is path w/o extension
 

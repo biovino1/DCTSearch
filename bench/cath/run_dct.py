@@ -73,7 +73,7 @@ def main():
     logging.basicConfig(level=logging.INFO, filename=f'{path}/results_dct.txt',
                          filemode='w', format='%(message)s')
     
-    # Get queries from CATH20 database and get top1/AUC1
+    # Get queries from CATH20 database and search against database
     os.environ['OMP_NUM_THREADS'] = str(args.cpu)
     search_cath20(path, queries, args.khits)
         

@@ -7,6 +7,8 @@ __date__ = "5/10/24"
 """
 
 import argparse
+import faiss
+import logging
 import os
 import sys
 sys.path.append(os.getcwd()+'/src')  # Add src to path
@@ -15,6 +17,7 @@ from io import BytesIO
 import torch
 from src.embedding import Model, Embedding
 from src.database import Database
+from bench.cath.run_dct import get_queries, search_cath20
 
 
 def embed_seqs(args: argparse.Namespace, db: Database, vid: int):
@@ -49,8 +52,38 @@ def embed_seqs(args: argparse.Namespace, db: Database, vid: int):
             VALUES(?, ?, ?, ?) """
         db.cur.execute(insert, (i+vid, f'1-{len(emb.seq)}', emb_bytes.getvalue(), emb.pid))
         db.conn.commit()
+
+
+def load_embs(db: Database) -> list[np.ndarray]:
+    """Returns a list of embeddings from the database.
+    """
+
+    embs = []
+    select = """ SELECT fingerprint FROM fingerprints """
+    for row in db.cur.execute(select):
+        emb_bytes = BytesIO(row[0])
+        embs.append(np.load(emb_bytes))
+
+    return embs
+
+
+def create_index(path: str, db: Database):
+    """Creates index of fingerprints for fast querying with FAISS.
+
+    Args:
+        path (str): Path to save index
+        db (Database): Database object connected to SQLite database
+    """
+
+    # Load fingerprints as a flat numpy array
+    embs = load_embs(db)
+    embs = np.array(embs)
+    dim = embs.shape[1]
     
-    db.close()
+    # Create index
+    index = faiss.IndexFlatL2(dim)
+    index.add(embs)
+    faiss.write_index(index, f'{path}/mean.index')
 
 
 def main():
@@ -60,6 +93,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cpu', type=int, default=1, help='Number of cpu cores to use for knn')
     parser.add_argument('--gpu', type=int, default=False, help='GPU to load model on')
+    parser.add_argument('--khits', type=int, default=14433, help='Number of nearest neighbors to find')
     parser.add_argument('--maxlen', type=int, default=1000, help='Max sequence length to embed')
     args = parser.parse_args()
 
@@ -68,6 +102,13 @@ def main():
     db = Database(f'{path}/mean.db', f'{path}/cath20.fa')
     vid = db.get_last_vid()
     embed_seqs(args, db, vid)
+    create_index(path, db)
+
+    # Get queries and search against database
+    queries = get_queries(f'{path}/cath20_queries.fa')
+    logging.basicConfig(level=logging.INFO, filename=f'{path}/results_mean.txt',
+                         filemode='w', format='%(message)s')
+    search_cath20(path, queries, args.khits)
 
 
 if __name__ == "__main__":
