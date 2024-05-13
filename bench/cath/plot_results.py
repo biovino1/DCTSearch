@@ -110,10 +110,10 @@ def graph_results(scores: list[dict[str, float]]):
         scores (list[dict[str, float]]): List of dictionaries containing AUC1 scores.
     """
 
-    methods = ['DCTSearch', 'MMseqs2']
+    methods = ['DCTSearch', 'ProtT5-Mean', 'MMseqs2']
     averages = [sum(sco.values()) / len(sco) for sco in scores]
     labels = [f'{m} (mean: {a:.2f})' for m, a in zip(methods, averages)]
-    colors = ['blue', 'red']
+    colors = ['blue', 'orange', 'red']
     _, ax = plt.subplots()
     for i, sco in enumerate(scores):
         y = range(len(sco))
@@ -134,12 +134,14 @@ def main():
 
     # Read results after running DCTSearch and MMseqs2
     dct_res = read_results(f'{path}/results_dct.txt', 1, 5)
+    mean_res = read_results(f'{path}/results_mean.txt', 1, 5)
     mmseqs_res = read_results(f'{path}/results_mmseqs.txt', 0, 1)
 
     # Plot AUC1 scores for each query
     dct_scores = eval_scores(path, dct_res)
+    mean_scores = eval_scores(path, mean_res)
     mmseqs_scores = eval_scores(path, mmseqs_res)
-    graph_results([dct_scores, mmseqs_scores])
+    graph_results([dct_scores, mean_scores, mmseqs_scores])
 
 
 if __name__ == '__main__':

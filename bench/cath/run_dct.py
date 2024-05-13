@@ -46,8 +46,8 @@ def search_cath20(path: str, queries: dict[str, str], khits: int):
         khits (int): Number of hits to return
     """
 
-    db = Database(f'{path}/cath20.db')
-    index = faiss.read_index(f'{path}/cath20.index')
+    db = Database(path)
+    index = faiss.read_index(path.replace('.db', '.index'))
     for pid, fam in queries.items():
         qfps = db.load_fprints(pid=f'{pid}|{fam}')
         que_arrs = np.array([fp[1] for fp in qfps])
@@ -75,7 +75,7 @@ def main():
     
     # Get queries from CATH20 database and search against database
     os.environ['OMP_NUM_THREADS'] = str(args.cpu)
-    search_cath20(path, queries, args.khits)
+    search_cath20(f'{path}/cath20.db', queries, args.khits)
         
 
 if __name__ == '__main__':
