@@ -7,3 +7,5 @@
 /bench/cath/__pycache__/
 /bench/scop/data
 /bench/scop/__pycache__/
+/bench/pfam/data
+/bench/pfam/__pycache__/
