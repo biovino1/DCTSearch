@@ -46,7 +46,6 @@ class Database:
                 self.path = os.path.splitext(dbfile)[0]
                 self.conn = sqlite3.connect(f'{self.path}.db')
                 self.cur = self.conn.cursor()
-                self.update = False
 
     
     def close(self):
@@ -95,7 +94,6 @@ class Database:
         self.path = os.path.splitext(self.path)[0]
         self.conn = sqlite3.connect(f'{self.path}.db')
         self.cur = self.conn.cursor()
-        self.update = False  # Flag for updating metadata in database
 
         # Create table for protein sequences
         table = """CREATE TABLE IF NOT EXISTS sequences (
@@ -147,7 +145,6 @@ class Database:
             list: List of tuples where elements are protein ID and sequence.
         """
 
-        self.update = True  # Assume sequences are being added to database
         seqs, curr_len, min_size = [], 0, dim1*dim2
         select = """ SELECT pid, sequence, length FROM sequences WHERE fpcount = 0 """
         rows = self.cur.execute(select).fetchall()
@@ -177,7 +174,6 @@ class Database:
             if seqs:  # Only one sequence in fasta/database
                 yield seqs
             else:
-                self.update = False  # No sequences added, no need for update
                 print('No sequences to fingerprint!\n')
 
     
@@ -282,6 +278,7 @@ class Database:
         """Updates metadata in the database.
         """
 
+        print('Updating metadata...')
         select = """ SELECT COUNT(*) FROM sequences """
         num_seqs = self.cur.execute(select).fetchone()[0]
         select = """ SELECT AVG(length) FROM sequences """  
@@ -297,11 +294,11 @@ class Database:
         date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         self.cur.execute(insert, (date, num_seqs, avg_len, nom_dom, f'{dom_seqs}/{num_seqs}'))
         self.conn.commit()
-        self.print_metadata()
+        self.db_info()
 
 
-    def print_metadata(self):
-        """Prints metadata from the database.
+    def db_info(self):
+        """Prints information about the database, updating metadata if necessary.
         """
 
         select = """ SELECT * FROM metadata ORDER BY datetime DESC LIMIT 1 """
@@ -313,17 +310,6 @@ class Database:
             print(f'Number of Fingerprints: {metadata[3]} ({metadata[4]} fingerprinted)\n')
         except TypeError:
             self.update_metadata()
-
-
-    def db_info(self):
-        """Prints information about the database, updating metadata if necessary.
-        """
-
-        if self.update:
-            print('\nUpdating metadata...')
-            self.update_metadata()
-        else:
-            self.print_metadata()
 
 
     def seq_info(self, seq: str):

@@ -200,9 +200,11 @@ def main():
     args = parser.parse_args()
 
     # Logging for either stdout or file
-    logging.basicConfig(level=logging.INFO, format='%(message)s')
     if args.out:
-        logging.basicConfig(filename=args.out, filemode='w')
+        logging.basicConfig(level=logging.INFO, filename=args.out,
+                             filemode='w', format='%(message)s')
+    else:
+        logging.basicConfig(level=logging.INFO, format='%(message)s')
     
     # Get last vid and create lock and counter
     db = Database(args.dbfile, args.fafile)
@@ -215,7 +217,7 @@ def main():
         embed_gpu(args, db, lock, counter)
     else:
         embed_cpu(args, db, lock, counter)
-    db.db_info()
+    db.update_metadata()
 
     # Create index
     if args.index:
