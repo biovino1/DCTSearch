@@ -6,11 +6,49 @@ __date__ = "5/08/24"
 
 import argparse
 import os
+from random import sample
 import sys
 sys.path.append(os.getcwd()+'/src')  # Add src to path
-import subprocess as sp
 from urllib.request import urlretrieve
 from zipfile import ZipFile
+
+
+def sample_seqs(path: str, fam: str, pids: list[str], n: int):
+    """Writes n number of sequences from dictionary to file.
+
+    Args:
+        path (str): Path to write sequences to.
+        fam (str): Pfam family.
+        pids (list[str]): List of protein ID's
+        n (int): Number of sequences to write.
+    """
+
+    if len(pids) < n:
+       return
+    pids = sample(pids, n)
+    
+    # Write each pid to file for getting sequence later
+    with open(f'{path}/pfam20.txt', 'a', encoding='utf-8') as file:
+        for pid in pids:
+            file.write(f'{pid}\n')
+
+
+def read_pfam(path: str):
+    """Reads Pfam-A.fasta and samples a number of sequences from each family.
+    """
+
+    fam, pids = '', []
+    with open(f'{path}/Pfam-A.fasta', 'r', encoding='utf-8') as file:
+        for line in file:
+
+            # New sequence, sample current group of seqs if new family
+            if line.startswith('>'):
+                line = line.split(';')
+                if line[1] != fam:
+                    sample_seqs(path, fam, pids, 20)
+                    fam, pids = line[1], []
+                pid = line[0].split('/')[0][1:]
+                pids.append(pid)
 
 
 def get_files(path: str):
@@ -24,7 +62,7 @@ def get_files(path: str):
         os.mkdir(path)
 
     # Fasta file
-    file = 'Pfam-A.full.gz'
+    file = 'Pfam-A.fasta.gz'
     url = f"http://ftp.ebi.ac.uk/pub/databases/Pfam/releases/Pfam33.1/{file}"
     print(f'Downloading {file}...')
     urlretrieve(url, f'{path}/{file}')
@@ -45,6 +83,7 @@ def main():
     path = 'bench/pfam/data'
     if not os.path.exists(path):
         get_files(path)
+        read_pfam(path)
 
 
 if __name__ == "__main__":
