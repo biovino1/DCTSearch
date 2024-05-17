@@ -18,7 +18,7 @@ from io import BytesIO
 import torch
 from transformers import T5EncoderModel, T5Tokenizer
 from src.database import Database
-from bench.cath.run_dct import get_queries, search_cath20
+from bench.run_dct import get_queries, search_db
 
 
 def prot_t5_embed(model: T5EncoderModel, tokenizer: T5Tokenizer, seq: str, device: str) -> np.ndarray:
@@ -129,24 +129,38 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
+    parser.add_argument('--bench', type=str, help='benchmark to test')
     parser.add_argument('--cpu', type=int, default=1, help='Number of cpu cores to use for knn')
     parser.add_argument('--gpu', type=int, default=False, help='GPU to load model on')
     parser.add_argument('--khits', type=int, default=14433, help='Number of nearest neighbors to find')
     parser.add_argument('--maxlen', type=int, default=1000, help='Max sequence length to embed')
     args = parser.parse_args()
 
+    # Determine query and db files
+    if args.bench == 'cath':
+        path = 'bench/cath/data'
+        query = 'cath20_queries.fa'
+        db = 'cath20.fa'
+    elif args.bench == 'pfam':
+        path = 'bench/pfam/data'
+        query = 'pfam20.fa'
+        db = 'pfam20.fa'
+    elif args.bench == 'scop':
+        path = 'bench/scop/data'
+        query = 'query.fa'
+        db = 'target.fa'
+
     # Embed sequences
-    path = 'bench/cath/data'
-    db = Database(f'{path}/mean.db', f'{path}/cath20.fa')
+    db = Database(f'{path}/mean.db', f'{path}/{db}')
     vid = db.get_last_vid()
     embed_seqs(args, db, vid)
     create_index(path, db)
 
     # Get queries and search against database
-    queries = get_queries(f'{path}/cath20_queries.fa')
+    queries = get_queries(f'{path}/{query}')
     logging.basicConfig(level=logging.INFO, filename=f'{path}/results_mean.txt',
                          filemode='w', format='%(message)s')
-    search_cath20(f'{path}/mean.db', queries, args.khits)
+    search_db(f'{path}/mean.db', queries, args.khits)
 
 
 if __name__ == "__main__":

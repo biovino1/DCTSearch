@@ -16,10 +16,10 @@ This command will download the dataset and fingerprint each sequence, as well as
 The benchmark can then be run and evaluated using the following commands:
 
 ```
-python -m bench.cath.run_dct
-python -m bench.cath.run_mean
-python -m bench.cath.run_mmseqs
-python -m bench.cath.plot_results
+python -m bench.run_dct --bench cath
+python -m bench.run_mean --bench cath
+python -m bench.run_mmseqs --bench cath
+python -m bench.plot_results --bench cath
 ```
 
 This will search the queries against the database using all benchmarked methods and plot the AUC1 curves for each method.

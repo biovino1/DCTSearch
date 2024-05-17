@@ -4,6 +4,7 @@
 /utils/__pycache__/
 /src/roc.ipynb
 /src/RecCut
+/bench/__pycache__/
 /bench/cath/data
 /bench/cath/__pycache__/
 /bench/scop/data

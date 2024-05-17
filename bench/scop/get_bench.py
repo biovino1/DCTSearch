@@ -89,7 +89,7 @@ def get_unshuffled(path: str):
                 seqs[pid] = (desc, line.strip())
                 
     # Write sequences to file
-    with open(f'{path}/query.fasta', 'w') as file:
+    with open(f'{path}/query.fa', 'w') as file:
         for pid, (desc, seq) in seqs.items():
             doms = ';'.join(desc.split('|')[0].split())
             file.write(f'>{pid}|{doms}\n{seq}\n')

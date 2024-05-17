@@ -11,6 +11,17 @@ You can prepare the MMseqs2 benchmark by running the follow command from the roo
 python -m bench.scop.get_bench
 ```
 
+This command will download the dataset and fingerprint each sequence, as well as prepare the query sequences.
+
+The benchmark can then be run and evaluated using the following commands:
+
+```
+python -m bench.run_dct --bench scop
+python -m bench.run_mean --bench scop
+python -m bench.run_mmseqs --bench scop
+python -m bench.plot_results --bench scop
+```
+
 
 ## References
 

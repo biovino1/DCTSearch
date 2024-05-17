@@ -35,9 +35,9 @@ def get_queries(file: str) -> dict[str, str]:
     return queries
 
 
-def search_cath20(path: str, queries: dict[str, str], khits: int):
-    """Similar to search_db in query_db.py, but queries CATH20 db with sequences from
-    cath20_queries.txt (which already exist in the db).
+def search_db(path: str, queries: dict[str, str], khits: int):
+    """Similar to search_db in query_db.py, but queries benchmark db with sequences from
+    queries text file (which already exist in the db).
 
     Args:
         path (str): Path to database and index files
@@ -63,19 +63,33 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cpu', type=int, default=1, help='number of cpus to use')
-    parser.add_argument('--khits', type=int, default=14433, help='number of hits to return')
+    parser.add_argument('--bench', type=str, help='benchmark to test')
+    parser.add_argument('--cpu', type=int, default=1, help='number of cpus to use for search')
+    parser.add_argument('--khits', type=int, default=300, help='number of hits to return')
     args = parser.parse_args()
 
+    # Determine query and db files
+    if args.bench == 'cath':
+        path = 'bench/cath/data'
+        query = 'cath20_queries.fa'
+        db = 'cath20.db'
+    elif args.bench == 'pfam':
+        path = 'bench/pfam/data'
+        query = 'pfam20.fa'
+        db = 'pfam20.db'
+    elif args.bench == 'scop':
+        path = 'bench/scop/data'
+        query = 'query.fa'
+        db = 'mmseqs2.db'
+
     # Read queries sequences
-    path = 'bench/cath/data'
-    queries = get_queries(f'{path}/cath20_queries.fa')
+    queries = get_queries(f'{path}/{query}')
     logging.basicConfig(level=logging.INFO, filename=f'{path}/results_dct.txt',
                          filemode='w', format='%(message)s')
     
     # Get queries from CATH20 database and search against database
     os.environ['OMP_NUM_THREADS'] = str(args.cpu)
-    search_cath20(f'{path}/cath20.db', queries, args.khits)
+    search_db(f'{path}/{db}', queries, args.khits)
         
 
 if __name__ == '__main__':
