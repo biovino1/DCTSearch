@@ -14,7 +14,7 @@ from database import Database
 from make_db import embed_cpu, embed_gpu
 
 
-def get_top_hits(dm: np.ndarray, im: np.ndarray, top: int, fp_db: Database, query_db: Database, que_ind: list):
+def get_top_hits(dm: np.ndarray, im: np.ndarray, top: int, fp_db: Database, query_db: Database, que_ind: list, metric: str = 'dist'):
     """Logs the top hits for each query sequence. Distance and index matrices are of dimensions
     (number of query fingerprints x khits). Indices correspond to vector ID's (vid) in the
     fingerprint databases.
@@ -26,6 +26,7 @@ def get_top_hits(dm: np.ndarray, im: np.ndarray, top: int, fp_db: Database, quer
         fp_db (Database): Database object for fingerprint database
         query_db (Database): Database object for query database
         que_ind (list): List of query vector ID's, allows for querying db against itself
+        metric (str): Distance metric used in faiss index (default 'dist', can be 'sim')
     """
 
     # Store all hits in a dict and sort by distance
@@ -33,7 +34,12 @@ def get_top_hits(dm: np.ndarray, im: np.ndarray, top: int, fp_db: Database, quer
     for i, khits in enumerate(dm):
         for j, dist in enumerate(khits):
             top_hits[i, j] = dist
-    top_hits = dict(sorted(top_hits.items(), key=lambda x: x[1]))
+
+    # Sort by distance or similarity
+    if metric == 'sim':
+        top_hits = dict(sorted(top_hits.items(), key=lambda x: -1*x[1]))
+    else:
+        top_hits = dict(sorted(top_hits.items(), key=lambda x: x[1]))
 
     # Get protein ID and domain for each hit (query and db)
     for i, index in enumerate(list(top_hits.keys())[:top]):

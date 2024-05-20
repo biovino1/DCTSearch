@@ -115,11 +115,17 @@ def create_index(path: str, db: Database):
 
     # Load fingerprints as a flat numpy array
     embs = load_embs(db)
-    embs = np.array(embs)
-    dim = embs.shape[1]
+    embs = np.array(embs, dtype=np.float32)
+
+    # Normalize for cosine similarity (as done in knnProtT5 paper)
+    for i in range(embs.shape[0]):
+        fp = np.expand_dims(embs[i], axis=0)
+        faiss.normalize_L2(fp)
+        embs[i] = fp
     
     # Create index
-    index = faiss.IndexFlatL2(dim)
+    dim = embs.shape[1]
+    index = faiss.IndexFlatIP(dim)
     index.add(embs)
     faiss.write_index(index, f'{path}/mean.index')
 
