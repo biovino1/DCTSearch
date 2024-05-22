@@ -192,19 +192,17 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--fafile', type=str, required=False, help='fasta file to embed')
     parser.add_argument('--dbfile', type=str, required=True, help='db file to write to')
-    parser.add_argument('--out', type=str, default=False, help='output file')
     parser.add_argument('--maxlen', type=int, default=500, help='max sequence length to embed')
-    parser.add_argument('--index', action='store_false', help='create index')
     parser.add_argument('--cpu', type=int, default=1, help='number of cpus to use')
     parser.add_argument('--gpu', type=int, required=False, help='number of gpus to use')
+    parser.add_argument('--noindex', action='store_true', help='toggle for not creating index')
+    parser.add_argument('--out', type=str, default='', help='print progress to file')
     args = parser.parse_args()
 
-    # Logging for either stdout or file
+    # Log results to file, otherwise output is quiet
     if args.out:
         logging.basicConfig(level=logging.INFO, filename=args.out,
                              filemode='w', format='%(message)s')
-    else:
-        logging.basicConfig(level=logging.INFO, format='%(message)s')
     
     # Get last vid and create lock and counter
     db = Database(args.dbfile, args.fafile)
@@ -220,7 +218,7 @@ def main():
     db.update_metadata()
 
     # Create index
-    if args.index:
+    if not args.noindex:
         os.environ['OMP_NUM_THREADS'] = str(args.cpu)
         print('Creating index...')
         create_index(db)
