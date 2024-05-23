@@ -338,3 +338,29 @@ class Database:
             print(f'Domains: {", ".join([dom[0] for dom in domains])}\n')
         else:
             print('No domains in database\n')
+
+
+    def save_fprints(self, file: str):
+        """Saves fingerprints to a npz file formatted as pid, idx, dom, fp.
+
+        Args:
+            file (str): Path to save file.
+        """
+
+        select = """ SELECT pid, domain, fingerprint FROM fingerprints """
+        self.cur.execute(select)
+        seqs, idxs, doms, fps  = [], [], [], []
+        seq, idx = '', 0
+
+        # Only add sequence ID + starting index once, but add each domain and fingerprint
+        for row in self.cur:
+            fprint = np.load(BytesIO(row[2]), allow_pickle=True)
+            if row[0] != seq:
+                seq = row[0]
+                seqs.append(seq)
+                idxs.append(idx)
+            doms.append(row[1])
+            fps.append(fprint)
+            idx += 1
+
+        np.savez(file, pid=seqs, idx=idxs, dom=doms, fp=fps)
