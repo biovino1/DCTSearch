@@ -164,7 +164,7 @@ class Embedding:
             outputs = model.pt5_encoder(input_ids=input_ids, attention_mask=attention_mask)
         embs = {}
         for layer in layers:
-            embs[layer] = outputs.hidden_states[layer][0]
+            embs[layer] = outputs.hidden_states[layer][0][:len(self.seq)]
 
         return embs
 
@@ -292,18 +292,26 @@ class Batch:
             layers (list): List of layers to extract embeddings from.
         """
 
-        _, _, batch_tokens = self.model.tokenizer(self.seqs)
+        # ESM-2 tokenizing
+        _, _, batch_tokens = self.model.esm_tokenizer(self.seqs)
         batch_lens = (batch_tokens != self.model.alphabet.padding_idx).sum(1)
         batch_tokens = batch_tokens.to(self.device)
 
+        # ProtT5 tokenizing
+        seqs = [" ".join(list(re.sub(r"[UZOB]", "X", seq[1]))) for seq in self.seqs]
+        ids = self.model.pt5_tokenizer(seqs, add_special_tokens=True, padding="longest")
+        input_ids = torch.tensor(ids['input_ids']).to(self.device)
+        attention_mask = torch.tensor(ids['attention_mask']).to(self.device)
+
         # Embed sequences and parse results into individual Embedding objects
         with torch.no_grad():
-            results = self.model.encoder(batch_tokens, repr_layers=layers, return_contacts=True)
+            contacts = self.model.esm_encoder(batch_tokens, return_contacts=True)
+            embs = self.model.pt5_encoder(input_ids=input_ids, attention_mask=attention_mask)
         for i, seq in enumerate(self.seqs):
             emb = Embedding(pid=seq[0], seq=seq[1])
-            for layer, embed in results["representations"].items():
-                emb.embed[layer] = embed[i][1:batch_lens[i]-1].cpu().numpy()
-            emb.contacts = results["contacts"][i][:batch_lens[i]-2, :batch_lens[i]-2].cpu().numpy()
+            emb.contacts = contacts["contacts"][i][:batch_lens[i]-2, :batch_lens[i]-2].cpu().numpy()
+            for layer in layers:
+                emb.embed[layer] = embs.hidden_states[layer][i][:batch_lens[i]-2].cpu().numpy()
             self.embeds.append(emb)
         
 
