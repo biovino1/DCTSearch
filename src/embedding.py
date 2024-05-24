@@ -5,26 +5,34 @@ __date__ = "2/19/24"
 """
 
 from dataclasses import dataclass, field
+import logging
 import os
 import esm
+import re
 import torch
+from transformers import T5EncoderModel, T5Tokenizer
 import numpy as np
+
+logging.getLogger("transformers").setLevel(logging.ERROR)
 
 
 class Model:
-    """Stores model and tokenizer for embedding sequences.
+    """Stores encoders and tokenizers for embedding sequences.
+
+    Attributes:
+        esm_encoder (esm.model.ProteinBertModel): ESM-2 model.
+        esm_tokenizer (esm.model.Alphabet): ESM-2 tokenizer.
+        pt5_encoder (T5EncoderModel): ProtT5-XL-U50 model.
+        pt5_tokenizer (T5Tokenizer): ProtT5-XL-U50 tokenizer.
     """
 
-    def __init__(self, model: str, checkpoint: str):
-        """Model contains encoder and tokenizer.
-
-        Args:
-            model (str): Model to use for embedding. Currently only supports ESM-2.
-            checkpoint (str): Model checkpoint to load.
+    def __init__(self):
+        """Model contains encoder and tokenizer for both ESM-2 and ProtT5. Checkpoints are set
+        after testing and are not meant to be changed, but can be done manually if desired.
         """
 
-        if model == 'esm2':
-            self.load_esm2(checkpoint)
+        self.load_esm2('t30')
+        self.load_pt5('xl_u50')
 
 
     def load_esm2(self, checkpoint: str):
@@ -35,12 +43,24 @@ class Model:
         """
 
         if checkpoint == 't33':
-            self.encoder, self.alphabet = esm.pretrained.esm2_t33_650M_UR50D()
+            self.esm_encoder, self.alphabet = esm.pretrained.esm2_t33_650M_UR50D()
         if checkpoint == 't30':
-            self.encoder, self.alphabet = esm.pretrained.esm2_t30_150M_UR50D()
+            self.esm_encoder, self.alphabet = esm.pretrained.esm2_t30_150M_UR50D()
 
-        self.tokenizer = self.alphabet.get_batch_converter()
-        self.encoder.eval()
+        self.esm_tokenizer = self.alphabet.get_batch_converter()
+        self.esm_encoder.eval()
+
+    
+    def load_pt5(self, checkpoint: str):
+        """Loads ProtT5-XL-U50 model.
+
+        Args:
+            checkpoint (str): Model checkpoint to load.
+        """
+
+        if checkpoint == 'xl_u50':
+            self.pt5_encoder = T5EncoderModel.from_pretrained('Rostlab/prot_t5_xl_uniref50', output_hidden_states=True)
+        self.pt5_tokenizer = T5Tokenizer.from_pretrained('Rostlab/prot_t5_xl_uniref50', legacy=True)
 
 
     def to_device(self, device: str):
@@ -50,7 +70,8 @@ class Model:
             device (str): gpu/cpu
         """
 
-        self.encoder.to(device)
+        self.esm_encoder.to(device)
+        self.pt5_encoder.to(device)
 
 
 @dataclass
@@ -97,34 +118,53 @@ class Embedding:
         return subseqs
 
 
-    def extract_embeds(self, seq: str, model: Model, device: str, layers: list) -> dict:
-        """Returns a dictionary containing embeddings from each layer and the contact map.
+    def extract_esm2(self, seq: str, model: Model, device: str) -> np.ndarray:
+        """Returns a dictionary containing contact map from ESM-2.
 
         Args:
             seq (str): Protein sequence.
             model (Model): Model class with encoder and tokenizer.
             device (str): gpu/cpu
-            layer (list: List of layers to extract embeddings from.
 
         Returns:
-            dict: Dictionary containing embeddings from each layer and the contact map.
+            np.ndarray: Contact map (nxn) of protein sequence.
         """
 
-        _, _, batch_tokens = model.tokenizer([(self.pid, seq)])
+        _, _, batch_tokens = model.esm_tokenizer([(self.pid, seq)])
         batch_tokens = batch_tokens.to(device)
-        try:
-            with torch.no_grad():
-                results = model.encoder(batch_tokens, repr_layers=layers, return_contacts=True)
-        except RuntimeError:
-            print(f'Error embedding {self.pid}, length {len(self.seq)}')
-            return {}
+        with torch.no_grad():
+            results = model.esm_encoder(batch_tokens, return_contacts=True)
+        
+        return results["contacts"][0]
 
-        # Store results from each layer
+
+    def extract_pt5(self, seq: str, model: Model, device: str, layers: list) -> dict:
+        """Returns a dictionary containing embeddings from ProtT5-XL-U50.
+
+        Args:
+            seq (str): Protein sequence.
+            model (Model): Model class with encoder and tokenizer.
+            device (str): gpu/cpu
+            layers (list): List of layers to extract embeddings from.
+
+        Returns:
+            dict: Dictionary of embeddings from ProtT5-XL-U50.
+        """
+
+        seq = re.sub(r"[UZOB]", "X", seq)
+        seq = [' '.join([*seq])]
+
+        # Tokenize, encode, and load sequence
+        ids = model.pt5_tokenizer.batch_encode_plus(seq, add_special_tokens=True, padding=True)
+        input_ids = torch.tensor(ids['input_ids']).to(device)  # pylint: disable=E1101
+        attention_mask = torch.tensor(ids['attention_mask']).to(device)  # pylint: disable=E1101
+
+        # Extract final layer of model
+        with torch.no_grad():
+            outputs = model.pt5_encoder(input_ids=input_ids, attention_mask=attention_mask)
         embs = {}
         for layer in layers:
-            emb = results["representations"][layer]
-            embs[layer] = emb[0][1:-1] # remove <cls> and <eos>
-        embs['ct'] = results["contacts"][0]
+            embs[layer] = outputs.hidden_states[layer][0]
 
         return embs
 
@@ -163,7 +203,7 @@ class Embedding:
         """Returns ESM-2 embedding and contact map of a protein sequence.
 
         Args:
-            model (Model): Model class with encoder and tokenizer.
+            pt_model (Model): Model class containing loaded ESM2 and ProtT5 models.
             device (str): gpu/cpu
             layer (list: List of layers to extract embeddings from.
             maxlen (int): Maximum length of sequence to embed
@@ -178,9 +218,13 @@ class Embedding:
         # Extract embeddings and contact maps for each subsequence
         edata = {}
         for i, seq in enumerate(subseqs):
-            embs = self.extract_embeds(seq, model, device, layers)
-            if not edata:  # dynamic initialization in case different layers are used
+            embs = self.extract_pt5(seq, model, device, layers)
+            ct = self.extract_esm2(seq, model, device)
+
+            # If first subsequence, initialize edata
+            if not edata:
                 edata = embs
+                edata['ct'] = ct
                 continue
 
             # Average overlapping positions between previous and current embeddings
