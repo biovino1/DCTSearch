@@ -158,13 +158,14 @@ class Embedding:
         ids = model.pt5_tokenizer.batch_encode_plus(seq, add_special_tokens=True, padding=True)
         input_ids = torch.tensor(ids['input_ids']).to(device)  # pylint: disable=E1101
         attention_mask = torch.tensor(ids['attention_mask']).to(device)  # pylint: disable=E1101
+        seq_len = (attention_mask == 1).sum()
 
         # Extract final layer of model
         with torch.no_grad():
             outputs = model.pt5_encoder(input_ids=input_ids, attention_mask=attention_mask)
         embs = {}
         for layer in layers:
-            embs[layer] = outputs.hidden_states[layer][0][:len(self.seq)]
+            embs[layer] = outputs.hidden_states[layer][0][:seq_len-1]
 
         return embs
 
@@ -229,12 +230,11 @@ class Embedding:
 
             # Average overlapping positions between previous and current embeddings
             for lay, emb in embs.items():
-                if lay == 'ct':
-                    edata[lay] = self.combine_contacts(edata[lay], emb, maxlen-olp, i)
-                    continue
                 edata[lay][-olp:] = (edata[lay][-olp:] + emb[:olp]) / 2
                 edata[lay] = torch.cat((edata[lay], emb[olp:]), axis=0)
+            edata['ct'] = self.combine_contacts(edata['ct'], ct, maxlen-olp, i)
 
+        # Store embeddings/contacts in Embedding object
         self.embed = {k: v.cpu().numpy() for k, v in edata.items() if k in layers}
         self.contacts = edata['ct'].cpu().numpy()
 

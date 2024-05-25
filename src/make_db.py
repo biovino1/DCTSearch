@@ -29,7 +29,7 @@ def queue_cpu(fp: Fingerprint) -> Fingerprint:
     """
 
     fp.reccut(2.6)
-    fp.quantize([3, 80, 3, 80])
+    fp.quantize([5, 85])
     logging.info(f'{datetime.datetime.now()} Fingerprinted {fp.pid}')
 
     return fp
@@ -67,7 +67,7 @@ def queue_gpu(rank: int, queue: mp.Queue, args: argparse.Namespace, db: Database
 
     # Load tokenizer and encoder
     device = torch.device(f'cuda:{rank}')
-    model = Model('esm2', 't30')  # pLM encoder and tokenizer
+    model = Model()  # pLM encoder and tokenizer
     model.to_device(device)
 
     # Embed batches of sequences
@@ -77,7 +77,7 @@ def queue_gpu(rank: int, queue: mp.Queue, args: argparse.Namespace, db: Database
         if seqs is None:
             break
         batch = Batch(seqs, model, device)
-        batch.embed_batch([15, 21], args.maxlen)
+        batch.embed_batch([17], args.maxlen)
 
         # Create Fingerprint object and add to queue
         for emb in batch.embeds:
@@ -129,7 +129,7 @@ def embed_cpu(args: argparse.Namespace, db: Database, lock: mp.Lock, counter: mp
         counter (Value): Value object for counting fingerprints
     """
 
-    model = Model('esm2', 't30')
+    model = Model()
     device = torch.device('cpu')
     model.to_device(device)
     
@@ -137,7 +137,7 @@ def embed_cpu(args: argparse.Namespace, db: Database, lock: mp.Lock, counter: mp
     cpu_queue = []
     for seqs in db.yield_seqs(1, args.cpu):
         batch = Batch(seqs, model, device)
-        batch.embed_batch([15, 21], args.maxlen)
+        batch.embed_batch([17], args.maxlen)
 
         # Create Fingerprint object and add to queue
         for emb in batch.embeds:
