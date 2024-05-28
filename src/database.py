@@ -5,6 +5,7 @@ __date__ = "3/18/24"
 """
 
 import datetime
+import faiss
 import sqlite3
 import os
 import numpy as np
@@ -220,39 +221,46 @@ class Database:
             with lock:
                 counter.value += 1  # ensure unique vid
                 self.cur.execute(insert, (counter.value, dom, quants_bytes.getvalue(), fp.pid))
-        self.conn.commit()  
+        self.conn.commit()
 
 
-    def load_fprints(self, vid: bool = True, pid: str = '') -> list:
-        """Loads fingerprints from database.
+    def create_index(self):
+        """Creates index of fingerprints for fast querying with FAISS.
+        """
+
+        # Load fingerprints
+        select = """ SELECT fingerprint FROM fingerprints """
+        self.cur.execute(select)
+        fprints = []
+        for row in self.cur:
+            fprint = np.load(BytesIO(row[0]), allow_pickle=True)
+            fprints.append(fprint)
+
+        # Create index
+        fps = np.array(fps, dtype=np.uint8)
+        index = faiss.IndexFlatL2(fps.shape[1])
+        index.add(fps)
+        faiss.write_index(index, f'{self.path}.index')  # db.path is path w/o extension
+
+
+    def load_fprints(self, pid: str = '') -> list:
+        """Returns a list of fingerprints for a given sequence ID.
 
         Args:
-            vid (bool): True if fingerprints are being loaded for searching.
             pid (str): Protein ID of sequence in database for querying.
 
         Returns:
             list: List of numpy arrays
         """
 
-        if vid and pid:  # need name of sequence when querying it against search database
-            select = """ SELECT vid, fingerprint FROM fingerprints WHERE pid = ? """
-            self.cur.execute(select, (pid,))
-        if vid and not pid:  # don't need seq names when database is being searched against
-            select = """ SELECT vid, fingerprint FROM fingerprints """
-            self.cur.execute(select)
-        if not vid and not pid:  # don't need vector ids when making an index
-            select = """ SELECT fingerprint FROM fingerprints """
-            self.cur.execute(select)
+        select = """ SELECT vid, fingerprint FROM fingerprints WHERE pid = ? """
+        self.cur.execute(select, (pid,))
 
         # Load fingerprints one at a time to save memory
         fprints = []
         for row in self.cur:
-            if vid: # row[0] is vid, row[1] is fingerprint
-                fprint = np.load(BytesIO(row[1]), allow_pickle=True)
-                fprints.append((row[0], fprint))
-            else:  # row[0] is fingerprint
-                fprint = np.load(BytesIO(row[0]), allow_pickle=True)
-                fprints.append(fprint)
+            fprint = np.load(BytesIO(row[1]), allow_pickle=True)
+            fprints.append((row[0], fprint))
         
         return fprints
     

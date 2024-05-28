@@ -155,29 +155,6 @@ def embed_cpu(args: argparse.Namespace, db: Database, lock: mp.Lock, counter: mp
     db.rename_vid()
 
 
-def create_index(db: Database):
-    """Creates index of fingerprints for fast querying with FAISS.
-
-    Args:
-        db (Database): Database object connected to SQLite database
-    """
-
-    # Check if index already exists
-    if os.path.exists(f'{db.path}.index'):
-        print(f'Index {db.path}.index already exists.\n')
-        return
-
-    # Load fingerprints as a flat numpy array
-    fps = db.load_fprints(vid=False)
-    fps = np.array(fps, dtype=np.uint8)
-    
-    # Create index
-    dim = fps.shape[1]  # dimension
-    index = faiss.IndexFlatL2(dim)
-    index.add(fps)
-    faiss.write_index(index, f'{db.path}.index')  # db.path is path w/o extension
-
-
 def main():
     """Sequences from a fasta file of protein sequences go through two processes:
 
@@ -221,7 +198,7 @@ def main():
     if not args.noindex:
         os.environ['OMP_NUM_THREADS'] = str(args.cpu)
         print('Creating index...')
-        create_index(db)
+        db.create_index()
     db.close()
 
 
