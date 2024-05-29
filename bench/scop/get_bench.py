@@ -11,29 +11,7 @@ sys.path.append(os.getcwd()+'/src')  # Add src to path
 import subprocess as sp
 from urllib.request import urlretrieve
 from zipfile import ZipFile
-
-
-def get_files(path: str):
-    """Downloads files from MMseqs2 server and SCOPe. MMseqs2 data can take some time to download.
-
-    Args:
-        path (str): Path to download files to.
-    """
-
-    if not os.path.exists(path):
-        os.mkdir(path)
-
-    # MMseqs2 benchmark
-    url = 'https://wwwuser.gwdg.de/~compbiol/mmseqs2/mmseqs2-benchmark.tar.gz'
-    print('Downloading MMseqs2 dataset...')
-    urlretrieve(url, f'{path}/mmseqs2-benchmark.tar.gz')
-    with ZipFile(f'{path}/mmseqs2-benchmark.tar.gz', 'r') as zip_ref:
-        zip_ref.extractall(f'{path}/')
-
-    # Classification file
-    url = 'https://scop.berkeley.edu/downloads/parse/dir.cla.scop.1.75.txt'
-    print('Downloading SCOP classification...')
-    urlretrieve(url, f'{path}/scop_class.txt')
+from utils.utils import download_file
 
 
 def modify_fasta(path: str):
@@ -113,9 +91,11 @@ def main():
     parser.add_argument('--gpu', type=int, required=False, help='number of gpus to use')
     args = parser.parse_args()
 
+    # Download files and prepare sequences
     path = 'bench/scop/data'
     if not os.path.exists(path):
-        get_files(path)
+        download_file('https://wwwuser.gwdg.de/~compbiol/mmseqs2', 'mmseqs2-benchmark.tar.gz', path)
+        download_file('https://scop.berkeley.edu/downloads/parse', 'dir.cla.scop.1.75.txt', path)
         modify_fasta(path)
         get_unshuffled(path)
 

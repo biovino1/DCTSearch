@@ -1,4 +1,6 @@
-"""Downloads Pfam v33.1 and prepares it for benchmarking.
+"""Downloads Pfam v33.1 and prepares it for benchmarking. Downloads files from ftp.ebi.ac.uk. Both
+files can take several hours to download. Pfam-A.fasta is 3.4G zipped and 7.5G unzipped, pfamseq
+is 11G zipped and 21G unzipped.
 
 __author__ = "Ben Iovino"
 __date__ = "5/08/24"
@@ -12,28 +14,7 @@ import sys
 sys.path.append(os.getcwd()+'/src')  # Add src to path
 from urllib.request import urlretrieve
 from zipfile import ZipFile
-
-
-def read_fasta(fafile: str) -> dict[str, str]:
-        """Returns a dictionary of sequences from a fasta file.
-
-        Args:
-            fafile (str): Path to fasta file.
-
-        Returns:
-            dict: Dictionary of sequences.
-        """
-
-        seqs = {}
-        with open(fafile, 'r', encoding='utf8') as f:
-            for line in f:
-                if line.startswith('>'):
-                    pid = line.split()[1]
-                    seqs[pid] = ''
-                else:
-                    seqs[pid] += line.strip()
-        
-        return seqs
+from utils.utils import read_fasta, download_file
     
 
 def get_seqs(path: str):
@@ -101,35 +82,8 @@ def read_pfam(path: str):
                 pids.append(pid)
 
 
-def get_files(path: str):
-    """Downloads files from ftp.ebi.ac.uk. Both files can take several hours to download.
-    Pfam-A.fasta is 3.4G zipped and 7.5G unzipped, pfamseq is 11G zipped and 21G unzipped.
-
-    Args:
-        path (str): Path to download files to.
-    """
-
-    if not os.path.exists(path):
-        os.mkdir(path)
-
-    # Fasta file
-    file = 'Pfam-A.fasta.gz'
-    url = 'http://ftp.ebi.ac.uk/pub/databases/Pfam/releases/Pfam33.1'
-    print(f'Downloading {url}/{file}...')
-    urlretrieve(f'{url}/{file}', f'{path}/{file}')
-    with ZipFile(f'{path}/{file}', 'r') as zip_ref:
-        zip_ref.extractall(f'{path}/')
-
-    # Full sequence file
-    file = 'pfamseq.gz'
-    print(f'Downloading {url}/{file}...')
-    urlretrieve(f'{url}/{file}', f'{path}/{file}')
-    with ZipFile(f'{path}/{file}', 'r') as zip_ref:
-        zip_ref.extractall(f'{path}/')
-
-
 def main():
-    """Downloads Pfam 33.1 and fingerprints sequences.
+    """Downloads Pfam v33.1 and fingerprints sequences.
     """
 
     parser = argparse.ArgumentParser()
@@ -138,9 +92,12 @@ def main():
     parser.add_argument('--gpu', type=int, required=False, help='number of gpus to use')
     args = parser.parse_args()
 
+    # Download files and prepare sequences
     path = 'bench/pfam/data'
     if not os.path.exists(path):
-        get_files(path)
+        url = 'http://ftp.ebi.ac.uk/pub/databases/Pfam/releases/Pfam33.1'
+        download_file(url, 'Pfam-A.fasta.gz', path)
+        download_file(url, 'pfamseq.gz', path)
         read_pfam(path)
         get_seqs(path)
 

@@ -9,29 +9,7 @@ import os
 import sys
 sys.path.append(os.getcwd()+'/src')  # Add src to path
 import subprocess as sp
-from urllib.request import urlretrieve
-
-
-def get_files(path: str):
-    """Downloads files from orengoftp.biochem.ucl.ac.uk.
-
-    Args:
-        path (str): Path to download files to.
-    """
-
-    if not os.path.exists(path):
-        os.mkdir(path)
-
-    # Fasta file
-    prefix = "ftp://orengoftp.biochem.ucl.ac.uk/cath/releases/all-releases/v4_2_0/"
-    url = prefix + "non-redundant-data-sets/cath-dataset-nonredundant-S20-v4_2_0.fa"
-    print('Downloading CATH20 dataset...')
-    urlretrieve(url, f'{path}/cath20.fa')
-
-    # Classification file
-    url = prefix + "cath-classification-data/cath-domain-list-v4_2_0.txt"
-    print('Downloading CATH20 classification...')
-    urlretrieve(url, f'{path}/cath20_class.txt')
+from utils.utils import download_file
 
 
 def read_classes(path: str) -> dict[str, str]:
@@ -45,7 +23,7 @@ def read_classes(path: str) -> dict[str, str]:
     """
 
     classes: dict[str, str] = {}  # key: CATH ID, value: classification
-    with open(f'{path}/cath20_class.txt', 'r', encoding='utf8') as file:
+    with open(f'{path}/cath-domain-list-v4_2_0.txt', 'r', encoding='utf8') as file:
         for line in file:
             if line.startswith('#'):
                 continue
@@ -66,7 +44,7 @@ def modify_fasta(path: str, classes: dict[str, str]):
     # Read fasta file for CATH IDs and sequences
     seqs: dict[str, str] = {}  # key: "CATH ID|CATH CLASS", value: sequence
     queries: dict[str, list: str] = {}  # key: classification, value: list of pid's in same class
-    with open(f'{path}/cath20.fa', 'r', encoding='utf8') as file:
+    with open(f'{path}/cath-dataset-nonredundant-S20-v4_2_0.fa', 'r', encoding='utf8') as file:
         for line in file:
             if line.startswith('>'):
                 cath_id = line.split('|')[2].split('/')[0]  # i.e. 16vpA00
@@ -107,9 +85,12 @@ def main():
     parser.add_argument('--gpu', type=int, required=False, help='number of gpus to use')
     args = parser.parse_args()
 
+    # Download files and prepare sequences
     path = 'bench/cath/data'
     if not os.path.exists(path):
-        get_files(path)
+        url = 'ftp://orengoftp.biochem.ucl.ac.uk/cath/releases/all-releases/v4_2_0'
+        download_file(f'{url}/non-redundant-data-sets', 'cath-dataset-nonredundant-S20-v4_2_0.fa', path)
+        download_file(f'{url}/cath-classification-data', 'cath-domain-list-v4_2_0.txt', path)
         classes = read_classes(path)
         modify_fasta(path, classes)
 

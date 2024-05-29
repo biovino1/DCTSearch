@@ -45,11 +45,11 @@ def measure_ram(path: str, args: argparse.Namespace, length: int) -> sp.Complete
     if args.gpu:
         result = sp.run(['python', 'src/make_db.py', f'--fafile={path}/ram_test.fa',
                         f'--dbfile={path}/ram_test', f'--maxlen={length}', f'--cpu={args.cpu}',
-                        f'--gpu={args.gpu}', '--index'], capture_output=True, text=True)
+                        f'--gpu={args.gpu}', '--noindex'], capture_output=True, text=True)
     else:
         result = sp.run(['python', 'src/make_db.py', f'--fafile={path}/ram_test.fa',
                         f'--dbfile={path}/ram_test', f'--maxlen={length}', f'--cpu={args.cpu}',
-                        '--index'], capture_output=True, text=True)
+                        '--noindex'], capture_output=True, text=True)
 
     return result
 
