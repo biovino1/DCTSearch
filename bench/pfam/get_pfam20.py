@@ -12,8 +12,6 @@ from random import sample
 import subprocess as sp
 import sys
 sys.path.append(os.getcwd()+'/src')  # Add src to path
-from urllib.request import urlretrieve
-from zipfile import ZipFile
 from utils.utils import read_fasta, download_file
     
 

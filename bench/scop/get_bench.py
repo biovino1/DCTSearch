@@ -9,8 +9,6 @@ import os
 import sys
 sys.path.append(os.getcwd()+'/src')  # Add src to path
 import subprocess as sp
-from urllib.request import urlretrieve
-from zipfile import ZipFile
 from utils.utils import download_file
 
 

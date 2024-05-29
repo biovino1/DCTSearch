@@ -6,10 +6,8 @@ __date__ = "12/18/23"
 
 import argparse
 import datetime
-import faiss
 import logging
 import os
-import numpy as np
 import torch
 import torch.multiprocessing as mp
 from multiprocessing import Pool, Lock, Value

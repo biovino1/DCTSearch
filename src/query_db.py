@@ -121,7 +121,7 @@ def main():
         embed_gpu(args, db, lock, counter)
     else:
         embed_cpu(args, db, lock, counter)
-    db.db_info()
+    db.update_metadata()
 
     # Query database for most similar sequence
     os.environ['OMP_NUM_THREADS'] = str(args.cpu)

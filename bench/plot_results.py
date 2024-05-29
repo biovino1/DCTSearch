@@ -125,15 +125,15 @@ def eval_scores(fams: dict[str, list], results: dict[str, set], method: str):
     return auc_scores
 
 
-def graph_results(scores: list[dict[str, float]], bench: str):
+def graph_results(scores: list[dict[str, float]], bench: str, methods: list[str]):
     """Graphs AUC1 scores for each query.
 
     Args:
         scores (list[dict[str, float]]): List of dictionaries containing AUC1 scores.
         bench (str): Benchmark being evaluated
+        methods (list[str]): List of methods being evaluated
     """
 
-    methods = ['DCTSearch', 'ProtT5-Mean', 'MMseqs2']
     averages = [sum(sco.values()) / len(sco) for sco in scores]
     labels = [f'{m} (mean: {a:.2f})' for m, a in zip(methods, averages)]
     colors = ['blue', 'orange', 'red']
@@ -174,10 +174,12 @@ def main():
     mmseqs_res = read_results(f'{path}/results_mmseqs.txt', 0, 1)
 
     # Plot AUC1 scores for each query
-    dct_scores = eval_scores(fams, dct_res, 'DCTSearch')
-    mean_scores = eval_scores(fams, mean_res, 'ProtT5-Mean')
-    mmseqs_scores = eval_scores(fams, mmseqs_res, 'MMseqs2')
-    graph_results([dct_scores, mean_scores, mmseqs_scores], args.bench)
+    scores = []
+    scores.append(eval_scores(fams, dct_res, 'DCTSearch'))
+    scores.append(eval_scores(fams, mean_res, 'ProtT5-Mean'))
+    scores.append(eval_scores(fams, mmseqs_res, 'MMseqs2'))
+    methods = ['DCTSearch', 'ProtT5-Mean', 'MMseqs2']
+    graph_results(scores, args.bench, methods)
 
 
 if __name__ == '__main__':
