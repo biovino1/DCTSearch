@@ -10,7 +10,7 @@ from zipfile import ZipFile
 
 
 
-def read_fasta(fafile: str) -> dict[str, str]:
+def read_fasta(fafile: str)-> dict[str, str]:
     """Returns a dictionary of sequences from a fasta file.
 
     Args:
@@ -20,11 +20,11 @@ def read_fasta(fafile: str) -> dict[str, str]:
         dict: Dictionary of sequences.
     """
 
-    seqs = {}
-    with open(fafile, 'r', encoding='utf8') as f:
-        for line in f:
+    seqs: dict[str, str] = {}
+    with open(fafile, 'r', encoding='utf8') as file:
+        for line in file:
             if line.startswith('>'):
-                pid = line.split()[1]
+                pid = line[1:].strip()
                 seqs[pid] = ''
             else:
                 seqs[pid] += line.strip()
@@ -42,7 +42,7 @@ def download_file(url: str, filename: str, path: str):
     """
 
     if not os.path.exists(path):
-        os.mkdir(path)
+        os.makedirs(path)
     print(f'Downloading {url}/{filename} to {path}...')
     urlretrieve(f'{url}/{filename}', f'{path}/{filename}')
 

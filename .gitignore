@@ -11,4 +11,6 @@
 /bench/scop/__pycache__/
 /bench/pfam/data
 /bench/pfam/__pycache__/
+/bench/models/data
+/bench/models/__pycache__/
 /utils/data/

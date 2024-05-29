@@ -31,11 +31,13 @@ def get_seqs(path: str):
     # Read full-length sequences from pfamseq
     full_seqs = read_fasta(f'{path}/pfamseq')
     for pid in seqs:
+        pid = pid.split()[1]
         seqs[pid] = full_seqs[pid.split('|')[0]]
 
     # Write sequences to file
     with open(f'{path}/pfam20.fa', 'w', encoding='utf-8') as file:
         for pid, seq in seqs.items():
+            pid = pid.split()[1]
             file.write(f'>{pid}\n{seq}\n')
 
 
