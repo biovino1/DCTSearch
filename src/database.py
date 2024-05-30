@@ -231,10 +231,10 @@ class Database:
         # Load fingerprints
         select = """ SELECT fingerprint FROM fingerprints """
         self.cur.execute(select)
-        fprints = []
+        fps = []
         for row in self.cur:
             fprint = np.load(BytesIO(row[0]), allow_pickle=True)
-            fprints.append(fprint)
+            fps.append(fprint)
 
         # Create index
         fps = np.array(fps, dtype=np.uint8)
