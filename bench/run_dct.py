@@ -35,7 +35,7 @@ def get_queries(file: str) -> dict[str, str]:
     return queries
 
 
-def search_db(path: str, queries: dict[str, str], khits: int):
+def search_db(path: str, queries: dict[str, str], khits: int, metric: str = 'dist'):
     """Similar to search_db in query_db.py, but queries benchmark db with sequences from
     queries text file (which already exist in the db).
 
@@ -53,8 +53,8 @@ def search_db(path: str, queries: dict[str, str], khits: int):
         que_arrs = np.array([fp[1] for fp in qfps])
         que_ind = np.array([fp[0] for fp in qfps])
         dm, im = index.search(que_arrs, khits)
-        get_top_hits(dm, im, khits, db, db, que_ind)
-    
+        get_top_hits(dm, im, khits, db, db, que_ind, metric)
+
     db.close()
 
 

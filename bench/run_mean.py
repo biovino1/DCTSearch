@@ -10,52 +10,14 @@ import argparse
 import faiss
 import logging
 import os
-import re
 import sys
 sys.path.append(os.getcwd()+'/src')  # Add src to path
 import numpy as np
 from io import BytesIO
 import torch
-from transformers import T5EncoderModel, T5Tokenizer
+from src.embedding import Model, Embedding
 from src.database import Database
 from bench.run_dct import get_queries, search_db
-
-
-def prot_t5_embed(model: T5EncoderModel, tokenizer: T5Tokenizer, seq: str, device: str) -> np.ndarray:
-    """Returns the mean embedding of a protein sequence using ProtT5_XL model.
-
-    Args:
-        model (T5EncoderModel): ProtT5_XL model
-        tokenizer (T5Tokenizer): ProtT5_XL tokenizer
-        seq (str): Protein sequence
-        device (str): Device to load model on
-
-    Returns:
-        np.ndarray: Mean embedding of protein sequence (1024, 1)
-    """
-
-    seq = re.sub(r"[UZOB]", "X", seq)
-    seq = [' '.join([*seq])]
-
-    # Tokenize, encode, and load sequence
-    ids = tokenizer.batch_encode_plus(seq, add_special_tokens=True, padding=True)
-    input_ids = torch.tensor(ids['input_ids']).to(device)  # pylint: disable=E1101
-    attention_mask = torch.tensor(ids['attention_mask']).to(device)  # pylint: disable=E1101
-
-    # Extract final layer of model
-    with torch.no_grad():
-        outputs = model(input_ids=input_ids, attention_mask=attention_mask)
-    emb = outputs.last_hidden_state.cpu().numpy()
-
-    # Remove padding and special tokens
-    features = []
-    for seq_num in range(len(emb)):  # pylint: disable=C0200
-        seq_len = (attention_mask[seq_num] == 1).sum()
-        seq_emd = emb[seq_num][:seq_len-1]
-        features.append(seq_emd)
-    emb = np.mean(features[0], axis=0)
-
-    return emb
 
 
 def embed_seqs(args: argparse.Namespace, db: Database, vid: int):
@@ -68,22 +30,20 @@ def embed_seqs(args: argparse.Namespace, db: Database, vid: int):
         vid (int): Fingerprint count tracker
     """
 
-    tokenizer = T5Tokenizer.from_pretrained('Rostlab/prot_t5_xl_uniref50')
-    model = T5EncoderModel.from_pretrained('Rostlab/prot_t5_xl_uniref50')
-    if args.gpu:
-        device = torch.device(f'cuda:{args.gpu}')
-    else:
-        device = torch.device('cpu')
-    model.to(device)
+    model = Model()
+    device = torch.device(f'cuda:{args.gpu}' if args.gpu else 'cpu')
+    model.to_device(device)
 
-    # Embed with prot_t5_xl model
+    # Embed and calculate mean embedding of last hidden layer (24)
     for i, seqs in enumerate(db.yield_seqs(1, 1)):
         pid, seq = seqs[0][0], seqs[0][1]
-        emb = prot_t5_embed(model, tokenizer, seq, device)
+        emb = Embedding(pid, seq)
+        emb.embed_seq(model, device, [24], args.maxlen)
+        mean = np.mean(emb.embed[24], axis=0)
         
-        # Add to database
+        # Add 'fingerprint' (mean embedding) to database
         emb_bytes = BytesIO()
-        np.save(emb_bytes, emb)
+        np.save(emb_bytes, mean)
         update = """ UPDATE sequences SET fpcount = ? WHERE pid = ? """
         db.cur.execute(update, (1, pid))
         insert = """ INSERT INTO fingerprints(vid, domain, fingerprint, pid)
@@ -135,7 +95,7 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--bench', type=str, help='benchmark to test')
+    parser.add_argument('--bench', type=str, required=True, help='benchmark to test')
     parser.add_argument('--cpu', type=int, default=1, help='Number of cpu cores to use for knn')
     parser.add_argument('--gpu', type=int, default=False, help='GPU to load model on')
     parser.add_argument('--khits', type=int, default=14433, help='Number of nearest neighbors to find')
@@ -166,7 +126,7 @@ def main():
     queries = get_queries(f'{path}/{query}')
     logging.basicConfig(level=logging.INFO, filename=f'{path}/results_mean.txt',
                          filemode='w', format='%(message)s')
-    search_db(f'{path}/mean.db', queries, args.khits)
+    search_db(f'{path}/mean.db', queries, args.khits, 'sim')
 
 
 if __name__ == "__main__":

@@ -138,14 +138,13 @@ class Embedding:
         return results["contacts"][0]
 
 
-    def extract_pt5(self, seq: str, model: Model, device: str, layers: list) -> dict:
-        """Returns a dictionary containing embeddings from ProtT5-XL-U50.
+    def extract_pt5(self, seq: str, model: Model, device: str) -> dict:
+        """Returns a dictionary containing embeddings from each layer of ProtT5-XL-U50.
 
         Args:
             seq (str): Protein sequence.
             model (Model): Model class with encoder and tokenizer.
             device (str): gpu/cpu
-            layers (list): List of layers to extract embeddings from.
 
         Returns:
             dict: Dictionary of embeddings from ProtT5-XL-U50.
@@ -158,16 +157,12 @@ class Embedding:
         ids = model.pt5_tokenizer.batch_encode_plus(seq, add_special_tokens=True, padding=True)
         input_ids = torch.tensor(ids['input_ids']).to(device)  # pylint: disable=E1101
         attention_mask = torch.tensor(ids['attention_mask']).to(device)  # pylint: disable=E1101
-        seq_len = (attention_mask == 1).sum()
 
-        # Extract final layer of model
+        # Extract and return dictionary of all hidden states
         with torch.no_grad():
             outputs = model.pt5_encoder(input_ids=input_ids, attention_mask=attention_mask)
-        embs = {}
-        for layer in layers:
-            embs[layer] = outputs.hidden_states[layer][0][:seq_len-1]
-
-        return embs
+        
+        return outputs
 
 
     def combine_contacts(self, mat1: torch.Tensor, mat2: torch.Tensor, inc: int, times: int) -> torch.Tensor:
@@ -219,7 +214,10 @@ class Embedding:
         # Extract embeddings and contact maps for each subsequence
         edata = {}
         for i, seq in enumerate(subseqs):
-            embs = self.extract_pt5(seq, model, device, layers)
+            outputs = self.extract_pt5(seq, model, device)
+            embs = {}
+            for layer in layers:
+                embs[layer] = outputs.hidden_states[layer][0][:len(seq)]
             ct = self.extract_esm2(seq, model, device)
 
             # If first subsequence, initialize edata
