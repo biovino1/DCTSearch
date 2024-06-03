@@ -29,10 +29,8 @@ def parse_class(filename: str) -> dict[str, list[str]]:
 
             # Get protein ID and classifications
             line = line.split()
-            pid = line[0]
-            reg = r'cf=[0-9]*'  # Fold ID
-            cla = re.search(reg, line[5]).group()[3:]
-            classes[pid] = cla
+            pid, sccs = line[0], line[3]
+            classes[pid] = sccs
 
     return classes
 
