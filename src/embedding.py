@@ -61,6 +61,7 @@ class Model:
         if checkpoint == 'xl_u50':
             self.pt5_encoder = T5EncoderModel.from_pretrained('Rostlab/prot_t5_xl_uniref50', output_hidden_states=True)
         self.pt5_tokenizer = T5Tokenizer.from_pretrained('Rostlab/prot_t5_xl_uniref50', legacy=True)
+        self.pt5_encoder.eval()
 
 
     def to_device(self, device: str):
@@ -118,7 +119,7 @@ class Embedding:
         return subseqs
 
 
-    def extract_esm2(self, seq: str, model: Model, device: str) -> np.ndarray:
+    def extract_esm2(self, seq: str, model: Model, device: str) -> dict:
         """Returns a dictionary containing contact map from ESM-2.
 
         Args:
@@ -127,15 +128,15 @@ class Embedding:
             device (str): gpu/cpu
 
         Returns:
-            np.ndarray: Contact map (nxn) of protein sequence.
+            dict: Dictionary of embeds/contact map from ESM-2.
         """
 
         _, _, batch_tokens = model.esm_tokenizer([(self.pid, seq)])
         batch_tokens = batch_tokens.to(device)
         with torch.no_grad():
-            results = model.esm_encoder(batch_tokens, return_contacts=True)
+            embeddings = model.esm_encoder(batch_tokens, return_contacts=True)
         
-        return results["contacts"][0]
+        return embeddings
 
 
     def extract_pt5(self, seq: str, model: Model, device: str) -> dict:
@@ -160,9 +161,9 @@ class Embedding:
 
         # Extract and return dictionary of all hidden states
         with torch.no_grad():
-            outputs = model.pt5_encoder(input_ids=input_ids, attention_mask=attention_mask)
+            embeddings = model.pt5_encoder(input_ids=input_ids, attention_mask=attention_mask)
         
-        return outputs
+        return embeddings
 
 
     def combine_contacts(self, mat1: torch.Tensor, mat2: torch.Tensor, inc: int, times: int) -> torch.Tensor:
@@ -212,13 +213,14 @@ class Embedding:
             subseqs = [self.seq]
 
         # Extract embeddings and contact maps for each subsequence
-        edata = {}
+        edata: dict[int/str: torch.Tensor] = {}  # Store here to combine each subsequence
         for i, seq in enumerate(subseqs):
-            outputs = self.extract_pt5(seq, model, device)
-            embs = {}
+            pt5_embeddings = self.extract_pt5(seq, model, device)
+            esm2_embeddings = self.extract_esm2(seq, model, device)
+            embs: dict[int: torch.Tensor] = {}
             for layer in layers:
-                embs[layer] = outputs.hidden_states[layer][0][:len(seq)]
-            ct = self.extract_esm2(seq, model, device)
+                embs[layer] = pt5_embeddings.hidden_states[layer][0][:len(seq)]
+            ct: torch.Tensor = esm2_embeddings['contacts'][0]
 
             # If first subsequence, initialize edata
             if not edata:
@@ -303,13 +305,13 @@ class Batch:
 
         # Embed sequences and parse results into individual Embedding objects
         with torch.no_grad():
-            contacts = self.model.esm_encoder(batch_tokens, return_contacts=True)
-            embs = self.model.pt5_encoder(input_ids=input_ids, attention_mask=attention_mask)
+            esm2_embeddings = self.model.esm_encoder(batch_tokens, return_contacts=True)
+            pt5_embeddings = self.model.pt5_encoder(input_ids=input_ids, attention_mask=attention_mask)
         for i, seq in enumerate(self.seqs):
             emb = Embedding(pid=seq[0], seq=seq[1])
-            emb.contacts = contacts["contacts"][i][:batch_lens[i]-2, :batch_lens[i]-2].cpu().numpy()
+            emb.contacts = esm2_embeddings["contacts"][i][:batch_lens[i]-2, :batch_lens[i]-2].cpu().numpy()
             for layer in layers:
-                emb.embed[layer] = embs.hidden_states[layer][i][:batch_lens[i]-2].cpu().numpy()
+                emb.embed[layer] = pt5_embeddings.hidden_states[layer][i][:batch_lens[i]-2].cpu().numpy()
             self.embeds.append(emb)
         
 
