@@ -39,20 +39,22 @@ def embed_seqs(fafile: str, dbdir: str):
         dbdir (str): Path to directory for databases.
     """
 
-    model, lock, counter = Model(), Lock(), Value('i', 0)
+    model, lock = Model(), Lock()
     for pid, seq in read_fasta(fafile).items():
         emb = Embedding(pid, seq)
         outputs = emb.extract_pt5(seq, model, 'cpu')
         for i, out in enumerate(outputs.hidden_states):
             db = Database(f'{dbdir}/layer{i}.db')
-            out = out.cpu().numpy()
-            fp = Fingerprint(pid, seq, embed={0: out[0]}, domains=[f'1-{len(seq)}'])
+            vid = db.get_last_vid() - 1  # counter is increased after adding fingerprint
+            counter = Value('i', vid)
+            fp = Fingerprint(pid, seq, embed={0: out[0].cpu().numpy()}, domains=[f'1-{len(seq)}'])
             fp.quantize([5, 85])
             db.add_fprint(fp, lock, counter)
 
 
 def main():
-    """Main function
+    """A database and index are created for every layer in the model, but sequences are only
+    embedded once.
     """
 
     parser = argparse.ArgumentParser()
@@ -69,6 +71,7 @@ def main():
         dbdir = f'{path}/cath/db'
         fafile = f'{path}/cath/seqs_test.fa'
 
+    # Initialize dbs and embed sequences
     init_dbs(layers, dbdir, fafile)
     embed_seqs(fafile, dbdir)
     for layer in layers:
