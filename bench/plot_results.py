@@ -8,6 +8,28 @@ import argparse
 import matplotlib.pyplot as plt
 
 
+def process_cid(cid: str, clasif: str) -> str:
+    """Returns the desired classification ID.
+
+    Args:
+        cid (str): Full classification ID
+        cid (str): Desired classification ID (SCOP ONLY)
+            fam - Family ID
+            supfam - Superfamily ID
+            fold - Fold ID
+
+    Returns:
+        str: Classification ID of sequence
+    """
+
+    if clasif == 'fam':
+        return '.'.join(cid.split('.')[0:4])
+    elif clasif == 'supfam':
+        return '.'.join(cid.split('.')[0:3])
+    elif clasif == 'fold':
+        return '.'.join(cid.split('.')[0:2])
+
+
 def get_classes(file: str, claisf: str) -> dict[str, list]:
     """Returns a dictionary of family names and the sequences that belong to them.
 
@@ -29,6 +51,7 @@ def get_classes(file: str, claisf: str) -> dict[str, list]:
                 line = line.split('|')
                 seq = line[0]
                 for cid in line[1].strip().split(';'):  # For multi-domain seqs (i.e. scop benchmark)
+                    cid = process_cid(cid, claisf)
                     if cid not in cids:
                         cids[cid] = set()
                     cids[cid].add(seq)
@@ -81,7 +104,7 @@ def read_results(path: str, query_ind: int, result_ind: int) -> dict[str, set]:
     return results
 
 
-def eval_scores(cids: dict[str, list], results: dict[str, set], method: str):
+def eval_scores(cids: dict[str, list], results: dict[str, set], method: str, clasif: str):
     """Returns dict of AUC1 scores for each query. AUC1 is calculated as the number of TP's
     up to the 1st FP divided by the number of sequences in the family.
 
@@ -89,6 +112,7 @@ def eval_scores(cids: dict[str, list], results: dict[str, set], method: str):
         cids (dict[str, list]): Dictionary of classification ID's and a list of sequences.
         results (dict[str, set]): Dictionary of query PID's and a set of TP's up to the 1st FP.
         method (str): Method being evaluated.
+        clasif (str): Desired classification ID
 
     Returns:
         dict[str, float]: key: query PID, value: AUC1 score
@@ -116,6 +140,7 @@ def eval_scores(cids: dict[str, list], results: dict[str, set], method: str):
         try:
             possible_hits = 0
             for cid in qcids.split(';'):
+                cid = process_cid(cid, clasif)
                 possible_hits += len(cids[cid])
             score = len(tps) / (possible_hits-1)  # ignore self hit
         except ZeroDivisionError:
@@ -186,12 +211,11 @@ def main():
 
     # Plot AUC1 scores for each query
     scores = []
-    scores.append(eval_scores(cids, dct_res, 'DCTSearch'))
-    scores.append(eval_scores(cids, mean_res, 'ProtT5-Mean'))
-    scores.append(eval_scores(cids, mmseqs_res, 'MMseqs2'))
+    scores.append(eval_scores(cids, dct_res, 'DCTSearch', args.cid))
+    scores.append(eval_scores(cids, mean_res, 'ProtT5-Mean', args.cid))
+    scores.append(eval_scores(cids, mmseqs_res, 'MMseqs2', args.cid))
     methods = ['DCTSearch', 'ProtT5-Mean', 'MMseqs2']
     graph_results(scores, args.bench, methods)
-
 
 if __name__ == '__main__':
     main()
