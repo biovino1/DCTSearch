@@ -31,18 +31,25 @@ def init_dbs(layers: list[str], dbdir: str, fafile: str):
         Database(f'{dbdir}/layer{layer}.db', fafile)
 
 
-def embed_seqs(fafile: str, dbdir: str):
+def embed_seqs(fafile: str, dbdir: str, gpu: int):
     """Embeds each sequence in dictionary and stores fingerprints in respective layer's db.
 
     Args:
         fafile (str): Path to fasta file.
         dbdir (str): Path to directory for databases.
+        gpu (int): GPU to load model on.
     """
 
+    device = f'cuda:{gpu}' if gpu else 'cpu'
     model, lock = Model(), Lock()
+    model.to_device(device)
+
+    # Read and embed each sequence individually
     for pid, seq in read_fasta(fafile).items():
         emb = Embedding(pid, seq)
-        outputs = emb.extract_pt5(seq, model, 'cpu')
+        outputs = emb.extract_pt5(seq, model, device)
+
+        # Add fingerprint from each layer to respective db
         for i, out in enumerate(outputs.hidden_states):
             db = Database(f'{dbdir}/layer{i}.db')
             vid = db.get_last_vid() - 1  # counter is increased after adding fingerprint
@@ -60,6 +67,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--bench', type=str, required=True, help='scop or cath')
     parser.add_argument('--layers', type=int, default=25, help='Number of layers in model')
+    parser.add_argument('--gpu', type=int, default=False, help='GPU to load model on')
     args = parser.parse_args()
 
     path = 'bench/models/data'
@@ -73,7 +81,7 @@ def main():
 
     # Initialize dbs and embed sequences
     init_dbs(layers, dbdir, fafile)
-    embed_seqs(fafile, dbdir)
+    embed_seqs(fafile, dbdir, args.gpu)
     for layer in layers:
         db = Database(f'{dbdir}/layer{layer}.db')
         db.create_index()
