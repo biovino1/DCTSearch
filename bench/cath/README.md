@@ -19,7 +19,7 @@ The benchmark can then be run and evaluated using the following commands:
 python -m bench.run_dct --bench cath
 python -m bench.run_mean --bench cath
 python -m bench.run_mmseqs --bench cath
-python -m bench.plot_results --bench cath
+python -m bench.plot_results --bench cath --tp fam --fp fam
 ```
 
 This will search the queries against the database using all benchmarked methods and plot the AUC1 curves for each method.

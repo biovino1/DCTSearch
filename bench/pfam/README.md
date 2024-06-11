@@ -19,8 +19,10 @@ The benchmark can then be run and evaluated using the following commands:
 python -m bench.run_dct --bench pfam
 python -m bench.run_mean --bench pfam
 python -m bench.run_mmseqs --bench pfam
-python -m bench.plot_results --bench pfam
+python -m bench.plot_results --bench pfam --tp fam --fp fam
 ```
+
+This will search the queries against the database using all benchmarked methods and plot the AUC1 curves for each method.
 
 ## References
 
