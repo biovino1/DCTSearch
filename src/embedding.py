@@ -135,7 +135,7 @@ class Embedding:
         batch_tokens = batch_tokens.to(device)
         with torch.no_grad():
             embeddings = model.esm_encoder(batch_tokens, return_contacts=True)
-        
+
         return embeddings
 
 
@@ -162,7 +162,7 @@ class Embedding:
         # Extract and return dictionary of all hidden states
         with torch.no_grad():
             embeddings = model.pt5_encoder(input_ids=input_ids, attention_mask=attention_mask)
-        
+
         return embeddings
 
 

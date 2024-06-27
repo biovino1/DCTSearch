@@ -189,7 +189,7 @@ class Fingerprint:
                 dom_emb, dom = self.get_doms(embed, domain)
                 if not dom_emb.size:  # If domain is too long, embedding of size 0 is returned
                     continue
-                dct = self.idct_quant(dom_emb[1:len(dom_emb)-1], n_dim)  #pylint: disable=W0621
+                dct = self.idct_quant(dom_emb, n_dim)  #pylint: disable=W0621
                 ddct = self.idct_quant(dct.T, m_dim).T
                 ddct = ddct.reshape(n_dim * m_dim)
                 ddct = (ddct*127).astype('int8')
